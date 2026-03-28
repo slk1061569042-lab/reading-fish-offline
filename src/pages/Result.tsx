@@ -22,7 +22,18 @@ function formatDuration(sec: number): string {
 }
 
 function modeLabel(mode: GameMode): string {
-  return mode === 'positive' ? '正向模式' : '守护模式'
+  if (mode === 'reverse') return '守护模式'
+  if (mode === 'study') return '自习模式'
+  return '朗读模式'
+}
+
+function stageLabel(sec: number) {
+  if (sec >= 1200) return '鱼缸升级'
+  if (sec >= 900) return '发光鱼'
+  if (sec >= 600) return '大鱼出现'
+  if (sec >= 300) return '小鱼群'
+  if (sec >= 180) return '鱼苗'
+  return '起步中'
 }
 
 export function Result() {
@@ -50,10 +61,8 @@ export function Result() {
     return (
       <>
         <h1 className="page-title">暂无结果</h1>
-        <p style={{ color: 'var(--muted)' }}>请先完成一次阅读会话。</p>
-        <Link to="/reading">
-          <button type="button">去阅读</button>
-        </Link>
+        <p style={{ color: 'var(--muted)' }}>请先完成一次会话。</p>
+        <Link to="/reading"><button type="button">去开始</button></Link>
       </>
     )
   }
@@ -76,11 +85,12 @@ export function Result() {
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <AquariumTank fishCount={showFish} />
         <div style={{ padding: '1rem' }}>
-          <p style={{ margin: 0, fontSize: '1.1rem' }}>
-            <strong>{data.fishEarned}</strong> 条鱼
-          </p>
+          <p style={{ margin: 0, fontSize: '1.1rem' }}><strong>{data.fishEarned}</strong> 条鱼</p>
           <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
-            有效阅读 {formatDuration(data.effectiveSeconds)}
+            有效时长 {formatDuration(data.effectiveSeconds)}
+          </p>
+          <p style={{ margin: '0.35rem 0 0', color: 'var(--accent-soft)', fontSize: '0.9rem', fontWeight: 600 }}>
+            达成节点：{stageLabel(data.effectiveSeconds)}
           </p>
           {reverseDelta !== null && (
             <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
@@ -91,17 +101,9 @@ export function Result() {
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-        <Link to="/reading">
-          <button type="button">再读一轮</button>
-        </Link>
-        <button type="button" className="secondary" onClick={() => navigate('/records')}>
-          查看记录
-        </button>
-        <Link to="/">
-          <button type="button" className="secondary">
-            回首页
-          </button>
-        </Link>
+        <Link to="/reading"><button type="button">再来一轮</button></Link>
+        <button type="button" className="secondary" onClick={() => navigate('/records')}>查看记录</button>
+        <Link to="/"><button type="button" className="secondary">回首页</button></Link>
       </div>
     </>
   )

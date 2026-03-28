@@ -19,7 +19,9 @@ function formatDuration(sec: number): string {
 }
 
 function modeLabel(r: ReadingRecord): string {
-  return r.mode === 'reverse' ? '守护' : '正向'
+  if (r.mode === 'reverse') return '守护'
+  if (r.mode === 'study') return '自习'
+  return '朗读'
 }
 
 export function Records() {
@@ -46,49 +48,33 @@ export function Records() {
         <strong>汇总</strong>
         <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.1rem', color: 'var(--muted)', fontSize: '0.92rem' }}>
           <li>会话次数：{stats.sessionCount}</li>
-          <li>累计有效阅读：{formatDuration(stats.totalEffectiveSeconds)}</li>
+          <li>累计有效时长：{formatDuration(stats.totalEffectiveSeconds)}</li>
           <li>累计小鱼：{stats.totalFish}</li>
-          <li>正向 / 守护：{stats.positiveSessions} / {stats.reverseSessions}</li>
+          <li>朗读 / 守护 / 自习：{stats.positiveSessions} / {stats.reverseSessions} / {stats.studySessions}</li>
         </ul>
       </div>
 
       {records.length === 0 ? (
         <div className="card">
-          <p style={{ margin: 0, color: 'var(--muted)' }}>还没有记录，去读一会儿吧。</p>
+          <p style={{ margin: 0, color: 'var(--muted)' }}>还没有记录，去养一会儿鱼吧。</p>
           <Link to="/reading" style={{ display: 'inline-block', marginTop: '0.75rem' }}>
-            <button type="button">开始阅读</button>
+            <button type="button">开始</button>
           </Link>
         </div>
       ) : (
         <div className="card" style={{ padding: '0.5rem 0.65rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.35rem 0.45rem' }}>
             <strong>最近会话</strong>
-            <button type="button" className="secondary" style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }} onClick={clearAll}>
-              清空
-            </button>
+            <button type="button" className="secondary" style={{ padding: '0.35rem 0.65rem', fontSize: '0.8rem' }} onClick={clearAll}>清空</button>
           </div>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {records.map((r) => (
-              <li
-                key={r.id}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr auto',
-                  gap: '0.25rem 0.75rem',
-                  padding: '0.55rem 0.45rem',
-                  borderTop: '1px solid rgba(125, 211, 252, 0.12)',
-                  fontSize: '0.88rem',
-                }}
-              >
+              <li key={r.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.25rem 0.75rem', padding: '0.55rem 0.45rem', borderTop: '1px solid rgba(125, 211, 252, 0.12)', fontSize: '0.88rem' }}>
                 <div>
                   <div style={{ color: 'var(--muted)' }}>{formatShort(r.endedAt)}</div>
-                  <div style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>
-                    {(r.playerName || '未命名玩家')} · {modeLabel(r)}
-                  </div>
+                  <div style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{(r.playerName || '未命名玩家')} · {modeLabel(r)}</div>
                 </div>
-                <span style={{ textAlign: 'right', fontWeight: 600 }}>
-                  {r.fishEarned} 鱼 · {formatDuration(r.effectiveSeconds)}
-                </span>
+                <span style={{ textAlign: 'right', fontWeight: 600 }}>{r.fishEarned} 鱼 · {formatDuration(r.effectiveSeconds)}</span>
               </li>
             ))}
           </ul>
@@ -96,9 +82,7 @@ export function Records() {
       )}
 
       <Link to="/">
-        <button type="button" className="secondary">
-          回首页
-        </button>
+        <button type="button" className="secondary">回首页</button>
       </Link>
     </>
   )

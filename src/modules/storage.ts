@@ -1,6 +1,6 @@
 /** Local persistence: profile, tunable settings, and session records. Migrates legacy v1 records key. */
 
-export type GameMode = 'positive' | 'reverse'
+export type GameMode = 'positive' | 'reverse' | 'study'
 
 export type UserProfile = {
   playerName: string
@@ -8,6 +8,7 @@ export type UserProfile = {
 }
 
 export type GameSettings = {
+  mode: GameMode
   activeThreshold: number
   quietThreshold: number
   quietHoldMs: number
@@ -23,9 +24,7 @@ export type ReadingRecord = {
   fishEarned: number
   playerName?: string
   mode?: GameMode
-  /** Reverse mode: fish count at session start */
   fishAtStart?: number
-  /** Reverse mode: fish count at session end (optional clarity) */
   fishAtEnd?: number
 }
 
@@ -45,6 +44,7 @@ export const DEFAULT_PROFILE: UserProfile = {
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
+  mode: 'positive',
   activeThreshold: 0.012,
   quietThreshold: 0.006,
   quietHoldMs: 450,
@@ -69,16 +69,15 @@ function isRecord(x: unknown): x is ReadingRecord {
 }
 
 function isGameMode(x: unknown): x is GameMode {
-  return x === 'positive' || x === 'reverse'
+  return x === 'positive' || x === 'reverse' || x === 'study'
 }
 
 function clampSettings(s: Partial<GameSettings>): GameSettings {
-  let active = clampNum(s.activeThreshold, DEFAULT_SETTINGS.activeThreshold, 0.001, 0.08)
+  const active = clampNum(s.activeThreshold, DEFAULT_SETTINGS.activeThreshold, 0.001, 0.08)
   let quiet = clampNum(s.quietThreshold, DEFAULT_SETTINGS.quietThreshold, 0.0005, 0.06)
-  if (quiet >= active) {
-    quiet = Math.max(0.0005, active * 0.75)
-  }
+  if (quiet >= active) quiet = Math.max(0.0005, active * 0.75)
   return {
+    mode: isGameMode(s.mode) ? s.mode : DEFAULT_SETTINGS.mode,
     activeThreshold: active,
     quietThreshold: quiet,
     quietHoldMs: Math.round(clampNum(s.quietHoldMs, DEFAULT_SETTINGS.quietHoldMs, 100, 3000)),
@@ -155,7 +154,12 @@ function persist(save: AppSaveV2): void {
 }
 
 export function loadProfile(): UserProfile {
-  return { ...loadAppSave().profile }
+  const save = loadAppSave()
+  if (!save.profile.mode && save.settings.mode) {
+    save.profile.mode = save.settings.mode
+    persist(save)
+  }
+  return { ...save.profile }
 }
 
 export function saveProfile(profile: UserProfile): void {
@@ -165,18 +169,25 @@ export function saveProfile(profile: UserProfile): void {
 }
 
 export function loadSettings(): GameSettings {
-  return { ...loadAppSave().settings }
+  const save = loadAppSave()
+  if (!isGameMode(save.settings.mode) && isGameMode(save.profile.mode)) {
+    save.settings.mode = save.profile.mode
+    persist(save)
+  }
+  return { ...save.settings }
 }
 
 export function saveSettings(settings: GameSettings): void {
   const s = loadAppSave()
   s.settings = clampSettings(settings)
+  s.profile.mode = s.settings.mode
   persist(s)
 }
 
 export function resetSettingsToDefault(): GameSettings {
   const s = loadAppSave()
   s.settings = { ...DEFAULT_SETTINGS }
+  s.profile.mode = DEFAULT_SETTINGS.mode
   persist(s)
   return { ...DEFAULT_SETTINGS }
 }
@@ -203,12 +214,14 @@ export function recordStats(records: ReadingRecord[]) {
   const totalFish = records.reduce((acc, r) => acc + r.fishEarned, 0)
   const totalEffective = records.reduce((acc, r) => acc + r.effectiveSeconds, 0)
   const reverseSessions = records.filter((r) => r.mode === 'reverse').length
+  const studySessions = records.filter((r) => r.mode === 'study').length
   const positiveSessions = records.filter((r) => r.mode === 'positive' || r.mode === undefined).length
   return {
     sessionCount: records.length,
     totalFish,
     totalEffectiveSeconds: totalEffective,
     reverseSessions,
+    studySessions,
     positiveSessions,
   }
 }

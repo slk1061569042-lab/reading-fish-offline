@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { loadRecords, recordStats, type ReadingRecord } from '../modules/storage'
+import { clearAllRecords, loadRecords, recordStats, type ReadingRecord } from '../modules/storage'
 
 function formatShort(iso: string): string {
   try {
@@ -18,15 +18,18 @@ function formatDuration(sec: number): string {
   return `${m}m${s}s`
 }
 
+function modeLabel(r: ReadingRecord): string {
+  return r.mode === 'reverse' ? '守护' : '正向'
+}
+
 export function Records() {
   const [records, setRecords] = useState<ReadingRecord[]>(() => loadRecords())
-
   const stats = useMemo(() => recordStats(records), [records])
 
   const clearAll = () => {
     if (!records.length) return
     if (!window.confirm('确定清空全部本地记录？')) return
-    localStorage.removeItem('reading-fish.records.v1')
+    clearAllRecords()
     setRecords([])
   }
 
@@ -45,6 +48,7 @@ export function Records() {
           <li>会话次数：{stats.sessionCount}</li>
           <li>累计有效阅读：{formatDuration(stats.totalEffectiveSeconds)}</li>
           <li>累计小鱼：{stats.totalFish}</li>
+          <li>正向 / 守护：{stats.positiveSessions} / {stats.reverseSessions}</li>
         </ul>
       </div>
 
@@ -76,7 +80,12 @@ export function Records() {
                   fontSize: '0.88rem',
                 }}
               >
-                <span style={{ color: 'var(--muted)' }}>{formatShort(r.endedAt)}</span>
+                <div>
+                  <div style={{ color: 'var(--muted)' }}>{formatShort(r.endedAt)}</div>
+                  <div style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>
+                    {(r.playerName || '未命名玩家')} · {modeLabel(r)}
+                  </div>
+                </div>
                 <span style={{ textAlign: 'right', fontWeight: 600 }}>
                   {r.fishEarned} 鱼 · {formatDuration(r.effectiveSeconds)}
                 </span>

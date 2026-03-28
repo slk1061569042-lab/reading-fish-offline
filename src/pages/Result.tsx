@@ -1,13 +1,17 @@
 import { useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AquariumTank } from '../components/AquariumTank'
-import { appendRecord } from '../modules/storage'
+import { appendRecord, type GameMode } from '../modules/storage'
 
 export type ResultLocationState = {
   startedAt: string
   endedAt: string
   effectiveSeconds: number
   fishEarned: number
+  playerName: string
+  mode: GameMode
+  fishAtStart?: number
+  fishAtEnd?: number
 }
 
 function formatDuration(sec: number): string {
@@ -15,6 +19,10 @@ function formatDuration(sec: number): string {
   const m = Math.floor(sec / 60)
   const s = sec % 60
   return `${m} 分 ${s.toFixed(0)} 秒`
+}
+
+function modeLabel(mode: GameMode): string {
+  return mode === 'positive' ? '正向模式' : '守护模式'
 }
 
 export function Result() {
@@ -31,6 +39,10 @@ export function Result() {
       endedAt: data.endedAt,
       effectiveSeconds: data.effectiveSeconds,
       fishEarned: data.fishEarned,
+      playerName: data.playerName,
+      mode: data.mode,
+      fishAtStart: data.fishAtStart,
+      fishAtEnd: data.fishAtEnd,
     })
   }, [data])
 
@@ -46,19 +58,23 @@ export function Result() {
     )
   }
 
-  const showFish = Math.min(24, data.fishEarned)
+  const showFish = Math.min(24, Math.max(1, data.fishEarned))
+  const reverseDelta =
+    data.mode === 'reverse' && typeof data.fishAtStart === 'number' && typeof data.fishAtEnd === 'number'
+      ? data.fishAtEnd - data.fishAtStart
+      : null
 
   return (
     <>
       <header>
         <h1 className="page-title">本次收获</h1>
         <p style={{ color: 'var(--muted)', margin: '0.35rem 0 0', fontSize: '0.95rem' }}>
-          已保存到本地记录。
+          {data.playerName || '未命名玩家'} · {modeLabel(data.mode)} · 已保存到本地记录。
         </p>
       </header>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <AquariumTank fishCount={Math.max(1, showFish)} />
+        <AquariumTank fishCount={showFish} />
         <div style={{ padding: '1rem' }}>
           <p style={{ margin: 0, fontSize: '1.1rem' }}>
             <strong>{data.fishEarned}</strong> 条鱼
@@ -66,6 +82,11 @@ export function Result() {
           <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
             有效阅读 {formatDuration(data.effectiveSeconds)}
           </p>
+          {reverseDelta !== null && (
+            <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
+              守护结果：起始 {data.fishAtStart} 条 → 结束 {data.fishAtEnd} 条（{reverseDelta >= 0 ? '+' : ''}{reverseDelta}）
+            </p>
+          )}
         </div>
       </div>
 

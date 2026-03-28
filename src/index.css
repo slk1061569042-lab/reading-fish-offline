@@ -37,8 +37,21 @@ a {
   color: var(--accent-soft);
 }
 
-button {
+button,
+input {
   font: inherit;
+}
+
+input {
+  width: 100%;
+  border: 1px solid rgba(125, 211, 252, 0.3);
+  border-radius: 12px;
+  padding: 0.75rem 0.9rem;
+  background: rgba(3, 25, 39, 0.35);
+  color: var(--text);
+}
+
+button {
   cursor: pointer;
   border: none;
   border-radius: 12px;
@@ -98,28 +111,14 @@ button.secondary {
   background: var(--muted);
 }
 
-.status-pill.idle .dot {
-  background: var(--muted);
-}
-.status-pill.requesting .dot {
-  background: var(--warn);
-  animation: pulse 1s ease infinite;
-}
-.status-pill.active .dot {
-  background: var(--success);
-  box-shadow: 0 0 8px var(--success);
-}
-.status-pill.quiet .dot {
-  background: var(--accent);
-}
-.status-pill.error .dot {
-  background: var(--danger);
-}
+.status-pill.idle .dot { background: var(--muted); }
+.status-pill.requesting .dot { background: var(--warn); animation: pulse 1s ease infinite; }
+.status-pill.active .dot { background: var(--success); box-shadow: 0 0 8px var(--success); }
+.status-pill.quiet .dot { background: var(--accent); }
+.status-pill.error .dot { background: var(--danger); }
 
 @keyframes pulse {
-  50% {
-    opacity: 0.4;
-  }
+  50% { opacity: 0.4; }
 }
 
 .progress-wrap {
@@ -163,4 +162,80 @@ button.secondary {
 .nav-row a.active {
   background: rgba(56, 189, 248, 0.25);
   color: var(--accent-soft);
+}
+
+.settings-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.settings-field__label {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.settings-field__hint,
+.mode-hint,
+.settings-saved {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.settings-form,
+.home-profile {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.settings-actions,
+.home-actions,
+.mode-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.volume-meter {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.volume-meter__track {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(3, 25, 39, 0.45);
+  overflow: hidden;
+  border: 1px solid rgba(125, 211, 252, 0.22);
+}
+
+.volume-meter__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22d3ee, #38bdf8, #fde68a);
+  transition: width 0.08s linear;
+}
+
+.volume-meter__mark {
+  position: absolute;
+  top: -2px;
+  width: 2px;
+  height: 16px;
+  background: white;
+  opacity: 0.9;
+}
+
+.volume-meter__mark--quiet { background: #fbbf24; }
+.volume-meter__mark--active { background: #4ade80; }
+
+.volume-meter__legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.volume-meter__vals {
+  text-align: right;
 }

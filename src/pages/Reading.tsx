@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AquariumTank } from '../components/AquariumTank'
+import { VolumeMeter } from '../components/VolumeMeter'
 import { useGameLoop } from '../hooks/useGameLoop'
 import {
+  audioConfigFromGameSettings,
   createVoiceStateMachine,
-  defaultAudioConfig,
   sampleRms,
   startMicPipeline,
   stopMicPipeline,
   type MicPipeline,
+  type VoiceStateMachine,
 } from '../modules/audioDetector'
-
-const FISH_EVERY_SEC = 15
+import { loadProfile, loadSettings, type GameMode, type GameSettings } from '../modules/storage'
 
 export type ReadingStatus = 'idle' | 'requesting' | 'active' | 'quiet' | 'error'
 
@@ -49,22 +50,57 @@ function statusClass(s: ReadingStatus): string {
   }
 }
 
+function modeUiLabel(m: GameMode): string {
+  return m === 'positive' ? '正向模式' : '守护模式'
+}
+
+export type ReadingResultPayload = {
+  startedAt: string
+  endedAt: string
+  effectiveSeconds: number
+  fishEarned: number
+  playerName: string
+  mode: GameMode
+  fishAtStart?: number
+  fishAtEnd?: number
+}
+
 export function Reading() {
   const navigate = useNavigate()
   const [uiStatus, setUiStatus] = useState<ReadingStatus>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const pipelineRef = useRef<MicPipeline | null>(null)
-  const voiceRef = useRef(createVoiceStateMachine(defaultAudioConfig))
+  const settingsRef = useRef<GameSettings>(loadSettings())
+  const voiceRef = useRef<VoiceStateMachine>(createVoiceStateMachine(audioConfigFromGameSettings(settingsRef.current)))
   const startedAtRef = useRef<string | null>(null)
-
-  const [effectiveSeconds, setEffectiveSeconds] = useState(0)
+  const sessionModeRef = useRef<GameMode>('positive')
+  const sessionPlayerRef = useRef('')
+  const fishAtStartRef = useRef<number | null>(null)
+  const reverseFishRef = useRef(0)
+  const reverseRecoverAccRef = useRef(0)
+  const reverseQuietAccRef = useRef(0)
+  const meterAccRef = useRef(0)
   const effectiveRef = useRef(0)
-  const [loopOn, setLoopOn] = useState(false)
 
-  const fishEarnedLive = Math.floor(effectiveSeconds / FISH_EVERY_SEC)
-  const intoFish = effectiveSeconds % FISH_EVERY_SEC
-  const progressPct = (intoFish / FISH_EVERY_SEC) * 100
-  const fishInTank = Math.min(24, fishEarnedLive)
+  const [sessionMode, setSessionMode] = useState<GameMode>('positive')
+  const [sessionPlayer, setSessionPlayer] = useState('')
+  const [effectiveSeconds, setEffectiveSeconds] = useState(0)
+  const [reverseFish, setReverseFish] = useState(0)
+  const [loopOn, setLoopOn] = useState(false)
+  const [meterLevel, setMeterLevel] = useState(0)
+
+  const fishEvery = settingsRef.current.fishEverySeconds
+  const activeTh = settingsRef.current.activeThreshold
+  const quietTh = settingsRef.current.quietThreshold
+  const fishEarnedLive =
+    sessionMode === 'positive' ? Math.floor(effectiveSeconds / fishEvery) : Math.round(reverseFish)
+  const intoFish = effectiveSeconds % fishEvery
+  const progressPct =
+    sessionMode === 'positive'
+      ? Math.min(100, (intoFish / fishEvery) * 100)
+      : Math.min(100, (reverseQuietAccRef.current / (fishEvery * 1000)) * 100)
+  const fishInTank =
+    sessionMode === 'positive' ? Math.min(24, fishEarnedLive) : Math.min(24, Math.max(0, Math.round(reverseFish)))
 
   const cleanupMic = useCallback(() => {
     stopMicPipeline(pipelineRef.current)
@@ -82,14 +118,33 @@ export function Reading() {
     setUiStatus('requesting')
     cleanupMic()
 
+    const settings = loadSettings()
+    settingsRef.current = settings
+    const profile = loadProfile()
+    sessionModeRef.current = profile.mode
+    sessionPlayerRef.current = profile.playerName
+    setSessionMode(profile.mode)
+    setSessionPlayer(profile.playerName)
+    voiceRef.current = createVoiceStateMachine(audioConfigFromGameSettings(settings))
+
     try {
-      const pipeline = await startMicPipeline(defaultAudioConfig)
+      const pipeline = await startMicPipeline(audioConfigFromGameSettings(settings))
       pipelineRef.current = pipeline
       if (pipeline.context.state === 'suspended') {
         await pipeline.context.resume()
       }
       startedAtRef.current = new Date().toISOString()
-      voiceRef.current.reset()
+      effectiveRef.current = 0
+      setEffectiveSeconds(0)
+      setMeterLevel(0)
+      reverseRecoverAccRef.current = 0
+      reverseQuietAccRef.current = 0
+
+      const startFish = Math.min(24, Math.max(0, settings.reverseInitialFish))
+      fishAtStartRef.current = startFish
+      reverseFishRef.current = startFish
+      setReverseFish(startFish)
+
       setUiStatus('quiet')
       setLoopOn(true)
     } catch (e) {
@@ -109,13 +164,50 @@ export function Reading() {
       const voice = voiceRef.current
       voice.update(rms, dtMs)
 
+      meterAccRef.current += dtMs
+      if (meterAccRef.current >= 90) {
+        meterAccRef.current = 0
+        setMeterLevel(voice.smoothed)
+      }
+
+      const mode = sessionModeRef.current
+      const settings = settingsRef.current
+
       if (voice.isActive) {
         setUiStatus('active')
+        reverseQuietAccRef.current = 0
+
         const next = effectiveRef.current + dtMs / 1000
         effectiveRef.current = next
         setEffectiveSeconds(next)
+
+        if (mode === 'reverse') {
+          let fish = reverseFishRef.current
+          const cap = Math.min(24, settings.reverseInitialFish)
+          if (fish < cap) {
+            reverseRecoverAccRef.current += dtMs
+            while (reverseRecoverAccRef.current >= settings.fishEverySeconds * 1000 && fish < cap) {
+              reverseRecoverAccRef.current -= settings.fishEverySeconds * 1000
+              fish += 1
+            }
+          }
+          reverseFishRef.current = fish
+          setReverseFish(fish)
+        }
       } else {
         setUiStatus('quiet')
+        reverseRecoverAccRef.current = 0
+
+        if (mode === 'reverse') {
+          let fish = reverseFishRef.current
+          reverseQuietAccRef.current += dtMs
+          while (reverseQuietAccRef.current >= settings.fishEverySeconds * 1000 && fish > 0) {
+            reverseQuietAccRef.current -= settings.fishEverySeconds * 1000
+            fish -= 1
+          }
+          reverseFishRef.current = fish
+          setReverseFish(fish)
+        }
       }
     },
     loopOn,
@@ -123,21 +215,36 @@ export function Reading() {
 
   const endSession = useCallback(() => {
     const startedAt = startedAtRef.current ?? new Date().toISOString()
-    const eff = effectiveRef.current
-    const fish = Math.floor(eff / FISH_EVERY_SEC)
+    const effective = effectiveRef.current
+    const settings = settingsRef.current
+    const mode = sessionModeRef.current
+    const playerName = sessionPlayerRef.current
+    const fishAtStart = fishAtStartRef.current
+    const positiveFish = Math.floor(effective / settings.fishEverySeconds)
+    const fishAtEnd = mode === 'positive' ? positiveFish : Math.max(0, Math.round(reverseFishRef.current))
+
+    const payload: ReadingResultPayload = {
+      startedAt,
+      endedAt: new Date().toISOString(),
+      effectiveSeconds: effective,
+      fishEarned: fishAtEnd,
+      playerName,
+      mode,
+      fishAtStart: fishAtStart ?? undefined,
+      fishAtEnd,
+    }
+
     cleanupMic()
     setUiStatus('idle')
     startedAtRef.current = null
     effectiveRef.current = 0
+    fishAtStartRef.current = null
+    reverseQuietAccRef.current = 0
+    reverseRecoverAccRef.current = 0
     setEffectiveSeconds(0)
-    navigate('/result', {
-      state: {
-        startedAt,
-        endedAt: new Date().toISOString(),
-        effectiveSeconds: eff,
-        fishEarned: fish,
-      },
-    })
+    setReverseFish(0)
+
+    navigate('/result', { state: payload })
   }, [cleanupMic, navigate])
 
   const resetLocal = useCallback(() => {
@@ -146,49 +253,56 @@ export function Reading() {
     setErrorMessage(null)
     startedAtRef.current = null
     effectiveRef.current = 0
+    fishAtStartRef.current = null
+    reverseQuietAccRef.current = 0
+    reverseRecoverAccRef.current = 0
     setEffectiveSeconds(0)
+    setReverseFish(0)
+    setMeterLevel(0)
   }, [cleanupMic])
+
+  const subtitle =
+    sessionMode === 'positive'
+      ? `距离下一条鱼还差 ${(fishEvery - intoFish).toFixed(1)} 秒`
+      : reverseFish >= settingsRef.current.reverseInitialFish
+        ? '鱼缸稳定，继续守护'
+        : '持续朗读可让鱼群慢慢恢复'
 
   return (
     <>
       <header>
-        <h1 className="page-title">阅读中</h1>
-        <div
-          className={`status-pill ${statusClass(uiStatus)}`}
-          role="status"
-          aria-live="polite"
-          style={{ marginTop: '0.5rem' }}
-        >
+        <h1 className="page-title">{sessionPlayer || '未命名玩家'}｜{modeUiLabel(sessionMode)}</h1>
+        <div className={`status-pill ${statusClass(uiStatus)}`} role="status" aria-live="polite" style={{ marginTop: '0.5rem' }}>
           <span className="dot" />
           {statusLabel(uiStatus)}
         </div>
       </header>
 
-      {errorMessage && (
-        <p style={{ color: 'var(--danger)', margin: 0, fontSize: '0.9rem' }}>{errorMessage}</p>
-      )}
+      {errorMessage && <p style={{ color: 'var(--danger)', margin: 0, fontSize: '0.9rem' }}>{errorMessage}</p>}
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <AquariumTank fishCount={fishInTank} />
         <div style={{ padding: '0.75rem 1rem 1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: 6 }}>
-            <span>下一条鱼</span>
+          <VolumeMeter level={meterLevel} activeThreshold={activeTh} quietThreshold={quietTh} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', margin: '0.85rem 0 0.35rem' }}>
+            <span>{sessionMode === 'positive' ? '下一条鱼' : '守护进度'}</span>
             <span>
-              {intoFish.toFixed(1)} / {FISH_EVERY_SEC}s
+              {sessionMode === 'positive' ? `${intoFish.toFixed(1)} / ${fishEvery}s` : `${Math.round(reverseFish)} / ${settingsRef.current.reverseInitialFish} 鱼`}
             </span>
           </div>
-          <div className="progress-wrap" role="progressbar" aria-valuenow={intoFish} aria-valuemin={0} aria-valuemax={FISH_EVERY_SEC}>
+          <div className="progress-wrap" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100}>
             <div className="progress-bar" style={{ width: `${progressPct}%` }} />
           </div>
           <p style={{ margin: '0.65rem 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>
-            有效阅读 {effectiveSeconds.toFixed(1)} 秒 · 已得 {fishEarnedLive} 条鱼
+            有效朗读 {effectiveSeconds.toFixed(1)} 秒 · 当前 {fishEarnedLive} 条鱼
           </p>
+          <p style={{ margin: '0.25rem 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>{subtitle}</p>
         </div>
       </div>
 
       <div className="card">
         <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
-          提示：环境较吵时可适当提高朗读音量；停顿超过约半秒会进入「安静 / 已暂停」，该段时间不计入有效阅读。
+          提示：设置页可调朗读阈值和节奏。正向模式靠持续朗读得鱼；守护模式开始自带鱼缸，安静太久会掉鱼。
         </p>
       </div>
 

@@ -27,6 +27,23 @@ export const defaultAudioConfig: AudioDetectorConfig = {
   fftSize: 2048,
 }
 
+/** Merge persisted game thresholds/timing into the default mic pipeline config. */
+export function audioConfigFromGameSettings(settings: {
+  activeThreshold: number
+  quietThreshold: number
+  quietHoldMs: number
+}): AudioDetectorConfig {
+  let quiet = settings.quietThreshold
+  let active = settings.activeThreshold
+  if (quiet >= active) quiet = Math.max(0.0005, active * 0.75)
+  return {
+    ...defaultAudioConfig,
+    activeThreshold: active,
+    quietThreshold: quiet,
+    quietHoldMs: settings.quietHoldMs,
+  }
+}
+
 export function computeRms(samples: Float32Array): number {
   if (samples.length === 0) return 0
   let sum = 0

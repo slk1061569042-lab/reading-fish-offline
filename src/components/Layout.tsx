@@ -9,6 +9,7 @@ export function Layout() {
         </NavLink>
         <NavLink to="/reading">阅读</NavLink>
         <NavLink to="/records">记录</NavLink>
+        <NavLink to="/settings">设置</NavLink>
       </nav>
       <Outlet />
     </div>

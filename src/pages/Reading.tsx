@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AquariumTank } from '../components/AquariumTank'
 import { VolumeMeter } from '../components/VolumeMeter'
@@ -28,6 +29,7 @@ type FishCounts = {
 type WindowStats = {
   activeSeconds: number
   quietSeconds: number
+  warnSeconds: number
   badSeconds: number
   worstBadStreak: number
   currentBadStreak: number
@@ -64,17 +66,31 @@ function summarizeFish(counts: FishCounts) {
   return counts.normal + counts.good + counts.rare + counts.superRare + counts.dead
 }
 
+function sumRawFish(counts: FishCounts) {
+  return counts.normal + counts.good + counts.rare + counts.dead
+}
+
+function DebugButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+  return (
+    <button type="button" className="debug-panel__button secondary" onClick={onClick}>
+      {children}
+    </button>
+  )
+}
+
 function classifyFish(mode: GameMode, stats: WindowStats): Exclude<FishTier, 'superRare'> {
   if (mode === 'study') {
-    if (stats.quietSeconds >= 13.5) return 'rare'
-    if (stats.quietSeconds >= 9) return 'good'
-    if (stats.quietSeconds >= 3.5) return 'normal'
+    const stableQuiet = stats.quietSeconds + stats.warnSeconds * 0.65
+    if (stableQuiet >= 13) return 'rare'
+    if (stableQuiet >= 8.5) return 'good'
+    if (stableQuiet >= 4.5) return 'normal'
     return 'dead'
   }
 
-  if (stats.activeSeconds >= 12.5) return 'rare'
-  if (stats.activeSeconds >= 8) return 'good'
-  if (stats.activeSeconds >= 3) return 'normal'
+  const effectiveActive = stats.activeSeconds + stats.warnSeconds * 0.6
+  if (effectiveActive >= 12) return 'rare'
+  if (effectiveActive >= 7.5) return 'good'
+  if (effectiveActive >= 4.2) return 'normal'
   return 'dead'
 }
 
@@ -238,7 +254,7 @@ export function Reading() {
   const effectiveRef = useRef(0)
   const meterAccRef = useRef(0)
   const progressRef = useRef(0)
-  const statsRef = useRef<WindowStats>({ activeSeconds: 0, quietSeconds: 0, badSeconds: 0, worstBadStreak: 0, currentBadStreak: 0 })
+  const statsRef = useRef<WindowStats>({ activeSeconds: 0, quietSeconds: 0, warnSeconds: 0, badSeconds: 0, worstBadStreak: 0, currentBadStreak: 0 })
   const fishCountsRef = useRef<FishCounts>({ normal: 0, good: 0, rare: 0, superRare: 0, dead: 0, shark: 0 })
   const fishResultsRef = useRef<FishResult[]>([])
   const rareFishNameRef = useRef<string | null>(null)
@@ -252,6 +268,7 @@ export function Reading() {
   const [meterLevel, setMeterLevel] = useState(0)
   const [progressSeconds, setProgressSeconds] = useState(0)
   const [lastTier, setLastTier] = useState<Exclude<FishTier, 'superRare'> | null>(null)
+  const [showDebugPanel, setShowDebugPanel] = useState(false)
 
   const cleanupMic = useCallback(() => {
     stopMicPipeline(pipelineRef.current)
@@ -266,7 +283,7 @@ export function Reading() {
     effectiveRef.current = 0
     meterAccRef.current = 0
     progressRef.current = 0
-    statsRef.current = { activeSeconds: 0, quietSeconds: 0, badSeconds: 0, worstBadStreak: 0, currentBadStreak: 0 }
+    statsRef.current = { activeSeconds: 0, quietSeconds: 0, warnSeconds: 0, badSeconds: 0, worstBadStreak: 0, currentBadStreak: 0 }
     fishCountsRef.current = { normal: 0, good: 0, rare: 0, superRare: 0, dead: 0, shark: 0 }
     fishResultsRef.current = []
     rareFishNameRef.current = null
@@ -280,7 +297,7 @@ export function Reading() {
 
   const resetCurrentFish = () => {
     progressRef.current = 0
-    statsRef.current = { activeSeconds: 0, quietSeconds: 0, badSeconds: 0, worstBadStreak: 0, currentBadStreak: 0 }
+    statsRef.current = { activeSeconds: 0, quietSeconds: 0, warnSeconds: 0, badSeconds: 0, worstBadStreak: 0, currentBadStreak: 0 }
     segmentStatesRef.current = Array.from({ length: 30 }, () => 'bad')
     setProgressSeconds(0)
   }
@@ -345,10 +362,15 @@ export function Reading() {
     const segmentIndex = Math.min(29, Math.floor((progressRef.current / FISH_WINDOW_SECONDS) * 30))
     segmentStatesRef.current[segmentIndex] = segmentState
 
-    if (goodNow) {
+    if (segmentState === 'good') {
       statsRef.current.currentBadStreak = 0
       if (mode === 'study') statsRef.current.quietSeconds += dt
       else statsRef.current.activeSeconds += dt
+    } else if (segmentState === 'warn') {
+      statsRef.current.currentBadStreak = 0
+      statsRef.current.warnSeconds += dt
+      if (mode === 'study') statsRef.current.quietSeconds += dt * 0.35
+      else statsRef.current.activeSeconds += dt * 0.35
     } else {
       statsRef.current.badSeconds += dt
       statsRef.current.currentBadStreak += dt
@@ -417,6 +439,33 @@ export function Reading() {
     resetCounters()
   }, [cleanupMic])
 
+  const injectFish = useCallback((tier: Exclude<FishTier, 'superRare'>, amount = 1) => {
+    if (amount <= 0) return
+    const nextCounts = { ...fishCountsRef.current }
+    const nextResults = [...fishResultsRef.current]
+    let firstRareName: string | null = null
+
+    for (let i = 0; i < amount; i += 1) {
+      nextCounts[tier] += 1
+      let rareName: string | undefined
+      if (tier === 'rare') {
+        rareName = pickRareFishName(effectiveRef.current + nextResults.length + i)
+        if (!rareFishNameRef.current && !firstRareName) firstRareName = rareName
+      }
+      nextResults.push({
+        tier,
+        rareFishName: rareName,
+        segments: Array.from({ length: 30 }, () => (tier === 'dead' ? 'bad' : tier === 'rare' ? 'good' : tier === 'good' ? 'warn' : 'good')),
+      })
+    }
+
+    if (firstRareName) rareFishNameRef.current = firstRareName
+    fishCountsRef.current = nextCounts
+    fishResultsRef.current = nextResults
+    setLastTier(tier)
+    setDisplayFish(Math.min(48, sumRawFish(nextCounts)))
+  }, [])
+
   const progressPct = Math.min(100, (progressSeconds / FISH_WINDOW_SECONDS) * 100)
   const progressSegments = 30
   const fishCounts = fishCountsRef.current
@@ -424,19 +473,10 @@ export function Reading() {
   const subtitle = qualityText(sessionMode, lastTier)
 
   return (
-    <>
-      <header>
-        <h1 className="page-title">{sessionPlayer || '未命名玩家'}｜{modeUiLabel(sessionMode)}</h1>
-        <div className={`status-pill ${uiStatus}`} role="status" aria-live="polite" style={{ marginTop: '0.5rem' }}>
-          <span className="dot" />
-          {statusLabel(uiStatus)}
-        </div>
-      </header>
-
-      {errorMessage && <p style={{ color: 'var(--danger)', margin: 0, fontSize: '0.9rem' }}>{errorMessage}</p>}
-
-      <div className="card reading-stage-card" style={{ padding: 0, overflow: 'hidden' }}>
+    <section className="reading-immersive">
+      <div className="reading-immersive__tank">
         <AquariumTank
+          className="reading-immersive__canvas"
           full
           normalCount={previewBattle.finalCounts.normal}
           goodCount={previewBattle.finalCounts.good}
@@ -445,41 +485,107 @@ export function Reading() {
           deadCount={previewBattle.finalCounts.dead}
           sharkCount={previewBattle.finalCounts.shark}
         />
-        <div style={{ padding: '0.8rem 1rem 1rem' }}>
-          <VolumeMeter level={meterLevel} activeThreshold={settingsRef.current.activeThreshold} quietThreshold={settingsRef.current.quietThreshold} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', margin: '0.95rem 0 0.35rem' }}>
-            <span>本条鱼进度（固定 15 秒）</span>
-            <span>{progressSeconds.toFixed(1)} / 15s</span>
-          </div>
-          <div className="progress-wrap progress-segments" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100}>
-            {Array.from({ length: progressSegments }).map((_, i) => {
-              const filled = progressPct >= ((i + 1) / progressSegments) * 100
-              const state = segmentStatesRef.current[i]
-              return <span key={i} className={`progress-segment ${filled ? `is-filled is-${state}` : ''}`} />
-            })}
-          </div>
-          <p style={{ margin: '0.7rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>累计时长 {effectiveSeconds.toFixed(1)} 秒 · 已结算 {displayFish} 条鱼/死鱼</p>
-          <p style={{ margin: '0.25rem 0 0', color: 'var(--accent-soft)', fontSize: '0.92rem', fontWeight: 700 }}>
-            普通鱼 {fishCounts.normal} · 优质鱼 {fishCounts.good} · 稀有鱼 {fishCounts.rare} · 死鱼 {fishCounts.dead}
-          </p>
-          <p style={{ margin: '0.25rem 0 0', color: 'var(--sand)', fontSize: '0.9rem', fontWeight: 700 }}>
-            预览：超级稀有鱼 {previewBattle.finalCounts.superRare} · 怨念鲨鱼 {previewBattle.finalCounts.shark}
-          </p>
-          <p style={{ margin: '0.3rem 0 0', color: lastTier === 'dead' ? 'var(--danger)' : 'var(--muted)', fontSize: '0.88rem' }}>{subtitle}</p>
-        </div>
       </div>
 
-      <div className="floating-actions">
-        {uiStatus === 'idle' || uiStatus === 'error' ? (
-          <button type="button" onClick={startReading}>{uiStatus === 'error' ? '重试' : '开始'}</button>
-        ) : (
-          <>
-            <button type="button" onClick={endSession}>结束</button>
-            <button type="button" className="secondary" onClick={resetLocal}>重置</button>
-            <Link to="/"><button type="button" className="secondary">首页</button></Link>
-          </>
-        )}
+      <div className="reading-immersive__overlay">
+        <header className="reading-hero">
+          <div className="reading-hero__copy">
+            <div className="reading-hero__eyebrow">{modeUiLabel(sessionMode)}</div>
+            <h1 className="page-title reading-hero__title">{sessionPlayer || '未命名玩家'}</h1>
+            <p className={`reading-hero__subtitle${lastTier === 'dead' ? ' is-danger' : ''}`}>{subtitle}</p>
+          </div>
+          <div className="reading-hero__meta">
+            <div className={`status-pill ${uiStatus}`} role="status" aria-live="polite">
+              <span className="dot" />
+              {statusLabel(uiStatus)}
+            </div>
+            <div className="reading-hero__runtime">累计 {effectiveSeconds.toFixed(1)} 秒</div>
+          </div>
+        </header>
+
+        {errorMessage ? <p className="reading-error">{errorMessage}</p> : null}
+
+        <div className="reading-hud">
+          <section className="card reading-hud-card reading-hud-card--meter">
+            <div className="reading-hud-card__label">声音监测</div>
+            <div className="reading-hud-card__title">当前鱼苗结算进度</div>
+            <div className="reading-hud-card__meter">
+              <VolumeMeter level={meterLevel} activeThreshold={settingsRef.current.activeThreshold} quietThreshold={settingsRef.current.quietThreshold} />
+            </div>
+            <div className="reading-progress-head">
+              <span>固定 15 秒结算</span>
+              <strong>{progressSeconds.toFixed(1)} / 15s</strong>
+            </div>
+            <div className="progress-wrap progress-segments" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100}>
+              {Array.from({ length: progressSegments }).map((_, i) => {
+                const filled = progressPct >= ((i + 1) / progressSegments) * 100
+                const state = segmentStatesRef.current[i]
+                return <span key={i} className={`progress-segment ${filled ? `is-filled is-${state}` : ''}`} />
+              })}
+            </div>
+          </section>
+
+          <section className="card reading-hud-card reading-hud-card--summary">
+            <div className="reading-hud-card__label">鱼缸概览</div>
+            <div className="reading-hud-stats">
+              <div className="reading-stat">
+                <span>已结算</span>
+                <strong>{displayFish}</strong>
+              </div>
+              <div className="reading-stat">
+                <span>普通</span>
+                <strong>{fishCounts.normal}</strong>
+              </div>
+              <div className="reading-stat">
+                <span>优质</span>
+                <strong>{fishCounts.good}</strong>
+              </div>
+              <div className="reading-stat">
+                <span>稀有</span>
+                <strong>{fishCounts.rare}</strong>
+              </div>
+              <div className="reading-stat">
+                <span>死鱼</span>
+                <strong>{fishCounts.dead}</strong>
+              </div>
+              <div className="reading-stat reading-stat--alert">
+                <span>合体预览</span>
+                <strong>超稀有 {previewBattle.finalCounts.superRare} · 鲨鱼 {previewBattle.finalCounts.shark}</strong>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div className="floating-actions floating-actions--reading">
+          {uiStatus === 'idle' || uiStatus === 'error' ? (
+            <button type="button" onClick={startReading}>{uiStatus === 'error' ? '重试' : '开始'}</button>
+          ) : (
+            <>
+              <button type="button" onClick={endSession}>结束</button>
+              <button type="button" className="secondary" onClick={resetLocal}>重置</button>
+              <Link to="/"><button type="button" className="secondary">首页</button></Link>
+            </>
+          )}
+          <button type="button" className="secondary" onClick={() => setShowDebugPanel((v) => !v)}>
+            {showDebugPanel ? '收起测试入口' : '测试入口'}
+          </button>
+        </div>
+
+        {showDebugPanel ? (
+          <div className="debug-panel card">
+            <div className="debug-panel__title">临时调试入口</div>
+            <div className="debug-panel__hint">仅用于快速生成鱼和排查规则，后续可直接删除。</div>
+            <div className="debug-panel__actions">
+              <DebugButton onClick={() => injectFish('normal')}>+1 普通鱼</DebugButton>
+              <DebugButton onClick={() => injectFish('good')}>+1 优质鱼</DebugButton>
+              <DebugButton onClick={() => injectFish('rare')}>+1 稀有鱼</DebugButton>
+              <DebugButton onClick={() => injectFish('dead')}>+1 死鱼</DebugButton>
+              <DebugButton onClick={() => injectFish('dead', 10)}>+10 死鱼（测鲨鱼）</DebugButton>
+              <DebugButton onClick={() => injectFish('rare', 10)}>+10 稀有鱼（测超稀有）</DebugButton>
+            </div>
+          </div>
+        ) : null}
       </div>
-    </>
+    </section>
   )
 }

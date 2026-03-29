@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { RareFishCard } from '../components/RareFishCard'
-import { clearAllRecords, listRareFish, loadRecords, recordStats, type ReadingRecord } from '../modules/storage'
+import { clearAllRecords, getRareFishDex, loadRecords, recordStats, type ReadingRecord } from '../modules/storage'
 
 function formatShort(iso: string): string {
   try {
@@ -28,7 +28,7 @@ function modeLabel(r: ReadingRecord): string {
 export function Records() {
   const [records, setRecords] = useState<ReadingRecord[]>(() => loadRecords())
   const stats = useMemo(() => recordStats(records), [records])
-  const rareFish = useMemo(() => listRareFish(records), [records])
+  const rareFishDex = useMemo(() => getRareFishDex(records), [records])
 
   const clearAll = () => {
     if (!records.length) return
@@ -57,15 +57,15 @@ export function Records() {
       </div>
 
       <div className="card">
-        <strong>稀有鱼图鉴</strong>
-        {rareFish.length > 0 ? (
+        <strong>已解锁稀有鱼</strong>
+        {rareFishDex.some((item) => item.unlocked) ? (
           <div className="rare-grid" style={{ marginTop: '0.75rem' }}>
-            {rareFish.map((r) => (
-              <RareFishCard key={`${r.id}-rare`} name={r.rareFishName!} subtitle={`${r.playerName || '未命名玩家'} · ${formatShort(r.endedAt)}`} compact />
+            {rareFishDex.filter((item) => item.unlocked).map((item) => (
+              <RareFishCard key={item.id} name={item.name} subtitle={`#${item.order} · 已出现 ${item.count} 次`} compact />
             ))}
           </div>
         ) : (
-          <p style={{ margin: '0.6rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>这里就是稀有鱼图鉴。你当前还没解锁稀有鱼，所以这里暂时为空。</p>
+          <p style={{ margin: '0.6rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>还没有真实刷出过稀有鱼，当前没有可展示的已解锁卡。</p>
         )}
       </div>
 

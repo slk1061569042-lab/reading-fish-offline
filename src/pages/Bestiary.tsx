@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { getBestiary, latestRareFish, listRareFish, loadRecords } from '../modules/storage'
+import { getBestiary, getRareFishDex, latestRareFish, loadRecords } from '../modules/storage'
 import { RareFishCard } from '../components/RareFishCard'
 
 function formatShort(iso?: string) {
@@ -16,7 +16,7 @@ export function Bestiary() {
   const records = loadRecords()
   const entries = getBestiary(records)
   const latestRare = latestRareFish(records)
-  const rareFishList = listRareFish(records)
+  const rareFishDex = getRareFishDex(records)
 
   return (
     <>
@@ -35,16 +35,34 @@ export function Bestiary() {
       ) : null}
 
       <div className="card">
-        <strong>已获得稀有鱼</strong>
-        {rareFishList.length > 0 ? (
-          <div className="rare-grid" style={{ marginTop: '0.75rem' }}>
-            {rareFishList.map((item) => (
-              <RareFishCard key={`${item.id}-bestiary-rare`} name={item.rareFishName!} subtitle={`${item.playerName || '未命名玩家'} · ${formatShort(item.endedAt)}`} compact />
-            ))}
-          </div>
-        ) : (
-          <p style={{ margin: '0.6rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>你还没有记录到已获得的稀有鱼。只要本轮真正刷出过，结束结算后就会进这里。</p>
-        )}
+        <strong>稀有鱼图鉴（按解锁顺序）</strong>
+        <p style={{ margin: '0.45rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>只有真正出现过的稀有鱼才会解锁；没刷出来的只显示剪影和解锁条件。</p>
+        <div className="rare-grid" style={{ marginTop: '0.75rem' }}>
+          {rareFishDex.map((entry) => (
+            <div key={entry.id} className={`card bestiary-card ${entry.unlocked ? 'is-unlocked' : 'is-locked'}`} style={{ margin: 0 }}>
+              {entry.unlocked ? (
+                <RareFishCard name={entry.name} subtitle={`#${entry.order} · 已出现 ${entry.count} 次`} compact />
+              ) : (
+                <div className="rare-card compact" style={{ opacity: 0.55 }}>
+                  <div className="rare-card__art">
+                    <div className="bestiary-card__lock">?</div>
+                  </div>
+                  <div className="rare-card__body">
+                    <div className="rare-card__badge">LOCKED</div>
+                    <div className="rare-card__name">???</div>
+                    <div className="rare-card__subtitle">#${entry.order} · 未解锁</div>
+                  </div>
+                </div>
+              )}
+              <div style={{ marginTop: '0.65rem', fontSize: '0.88rem', color: 'var(--muted)' }}>
+                <div><strong>{entry.unlocked ? entry.name : `未解锁稀有鱼 #${entry.order}`}</strong></div>
+                <div style={{ marginTop: '0.25rem' }}>{entry.unlocked ? `首次解锁：${formatShort(entry.unlockedAt)}` : `条件：${entry.unlockHint}`}</div>
+                <div style={{ marginTop: '0.25rem', color: 'var(--sand)' }}>技能：{entry.unlocked ? entry.skill : '解锁后显示'}</div>
+                <div style={{ marginTop: '0.25rem' }}>{entry.unlocked ? entry.description : '尚未在真实结算中出现。'}</div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="bestiary-grid">
@@ -70,7 +88,8 @@ export function Bestiary() {
         <strong>解锁规则</strong>
         <ul style={{ margin: '0.6rem 0 0', paddingLeft: '1.1rem', color: 'var(--muted)', fontSize: '0.9rem' }}>
           <li>普通鱼 / 优质鱼：本轮实际生成过就解锁</li>
-          <li>稀有鱼：本轮实际刷出过稀有鱼就解锁，并进入“已获得稀有鱼”列表</li>
+          <li>稀有鱼总类：只要本轮实际刷出过任意稀有鱼就解锁</li>
+          <li>稀有鱼单卡：只有该名字的稀有鱼真实出现过，才会按顺序解锁该卡</li>
           <li>超级稀有鱼：本轮真的触发过 10 稀有鱼合体才解锁</li>
           <li>死鱼：本轮实际生成过死鱼就解锁</li>
           <li>怨念鲨鱼：本轮真的触发过 10 死鱼合成才解锁</li>

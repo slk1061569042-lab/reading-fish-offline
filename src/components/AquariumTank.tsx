@@ -442,5 +442,17 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
     }
   }, [])
 
-  return <canvas ref={canvasRef} className={className} aria-hidden style={{ width: '100%', height: full ? 'min(62dvh, 560px)' : 'clamp(180px, 48vw, 300px)', display: 'block', borderRadius: 12 }} />
+  return (
+    <canvas
+      ref={canvasRef}
+      className={className}
+      aria-hidden
+      style={{
+        width: '100%',
+        height: full ? '100%' : 'clamp(180px, 48vw, 300px)',
+        display: 'block',
+        borderRadius: full ? 0 : 12,
+      }}
+    />
+  )
 }

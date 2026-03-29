@@ -4,6 +4,7 @@ export type GameMode = 'positive' | 'reverse' | 'study'
 export type SegmentState = 'good' | 'warn' | 'bad'
 export type FishTier = 'normal' | 'good' | 'rare' | 'superRare' | 'dead'
 export type BestiarySpecies = 'normal' | 'good' | 'rare' | 'superRare' | 'dead' | 'shark'
+export type RareFishSpeciesId = 'dawn-butterfly' | 'calm-gold' | 'moon-veil' | 'sunset-star'
 
 export type FishResult = {
   tier: Exclude<FishTier, 'superRare'>
@@ -44,6 +45,60 @@ export type BestiaryEntry = {
   description: string
   unlockHint: string
 }
+
+export type RareFishDexEntry = {
+  id: RareFishSpeciesId
+  name: string
+  order: number
+  unlocked: boolean
+  unlockedAt?: string
+  count: number
+  skill: string
+  description: string
+  unlockHint: string
+}
+
+const RARE_FISH_DEX: Array<{
+  id: RareFishSpeciesId
+  name: string
+  order: number
+  skill: string
+  description: string
+  unlockHint: string
+}> = [
+  {
+    id: 'dawn-butterfly',
+    name: '晨光蝶尾',
+    order: 1,
+    skill: '晨翼反击：参与对怨念鲨鱼的第一轮反击。',
+    description: '偏进攻型的稀有鱼，出现时代表这一轮朗读质量非常稳。',
+    unlockHint: '第一次真正刷出晨光蝶尾。',
+  },
+  {
+    id: 'calm-gold',
+    name: '静海流金',
+    order: 2,
+    skill: '静海护场：提高鱼群在混战中的稳定性。',
+    description: '偏防守型的稀有鱼，金色流纹明显，适合作为队伍稳定器。',
+    unlockHint: '第一次真正刷出静海流金。',
+  },
+  {
+    id: 'moon-veil',
+    name: '银月纱鳍',
+    order: 3,
+    skill: '月纱加护：为高阶鱼提供额外生存加成。',
+    description: '偏辅助型的稀有鱼，银白鳍纱明显，适合后排支援。',
+    unlockHint: '第一次真正刷出银月纱鳍。',
+  },
+  {
+    id: 'sunset-star',
+    name: '晚霞星鳞',
+    order: 4,
+    skill: '霞鳞爆发：在关键回合提供更高伤害。',
+    description: '偏爆发型的稀有鱼，晚霞色鳞片明显，是高压回合的输出点。',
+    unlockHint: '第一次真正刷出晚霞星鳞。',
+  },
+]
 
 function countGeneratedTier(record: ReadingRecord, tier: Exclude<FishTier, 'superRare'>): number {
   if (record.fishResults?.length) {
@@ -112,8 +167,8 @@ export const DEFAULT_PROFILE: UserProfile = {
 
 export const DEFAULT_SETTINGS: GameSettings = {
   mode: 'positive',
-  activeThreshold: 0.012,
-  quietThreshold: 0.006,
+  activeThreshold: 0.009,
+  quietThreshold: 0.0045,
   quietHoldMs: 450,
   fishEverySeconds: 15,
   reverseInitialFish: 5,
@@ -341,6 +396,41 @@ export function listRareFish(records: ReadingRecord[]): ReadingRecord[] {
 
 export function latestRareFish(records: ReadingRecord[]): ReadingRecord | null {
   return listRareFish(records)[0] ?? null
+}
+
+function findRareFishUnlockedAt(records: ReadingRecord[], rareFishName: string): string | undefined {
+  const ordered = [...records].reverse()
+  for (const record of ordered) {
+    const matched = record.fishResults?.some((item) => item.tier === 'rare' && item.rareFishName === rareFishName)
+    if (matched) return record.endedAt
+    if (record.rareFishName === rareFishName && hasGeneratedRare(record)) return record.endedAt
+  }
+  return undefined
+}
+
+export function getRareFishDex(records: ReadingRecord[]): RareFishDexEntry[] {
+  return RARE_FISH_DEX.map((spec) => {
+    let count = 0
+    for (const record of records) {
+      if (record.fishResults?.length) {
+        count += record.fishResults.filter((item) => item.tier === 'rare' && item.rareFishName === spec.name).length
+      } else if (record.rareFishName === spec.name && hasGeneratedRare(record)) {
+        count += Math.max(1, record.rareFish ?? 0)
+      }
+    }
+
+    return {
+      id: spec.id,
+      name: spec.name,
+      order: spec.order,
+      unlocked: count > 0,
+      unlockedAt: count > 0 ? findRareFishUnlockedAt(records, spec.name) : undefined,
+      count,
+      skill: spec.skill,
+      description: spec.description,
+      unlockHint: spec.unlockHint,
+    }
+  })
 }
 
 function firstUnlockedAt(records: ReadingRecord[], predicate: (r: ReadingRecord) => boolean): string | undefined {

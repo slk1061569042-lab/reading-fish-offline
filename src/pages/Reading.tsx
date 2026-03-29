@@ -325,7 +325,7 @@ export function Reading() {
             <span>{progressSeconds.toFixed(1)} / 15s</span>
           </div>
           <div className="progress-wrap" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100}>
-            <div className="progress-bar" style={{ width: `${progressPct}%` }} />
+            <div className="progress-bar" data-active={progressPct > 0 ? 'true' : 'false'} style={{ width: `${progressPct}%` }} />
           </div>
           <p style={{ margin: '0.7rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
             累计时长 {effectiveSeconds.toFixed(1)} 秒 · 已结算 {displayFish} 条鱼/死鱼

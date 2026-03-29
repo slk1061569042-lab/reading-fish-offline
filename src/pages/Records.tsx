@@ -57,9 +57,9 @@ export function Records() {
         </ul>
       </div>
 
-      {rareFish.length > 0 && (
-        <div className="card">
-          <strong>稀有鱼图鉴</strong>
+      <div className="card">
+        <strong>稀有鱼图鉴</strong>
+        {rareFish.length > 0 ? (
           <div className="rare-grid" style={{ marginTop: '0.75rem' }}>
             {rareFish.map((r) => (
               <RareFishCard
@@ -70,8 +70,12 @@ export function Records() {
               />
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          <p style={{ margin: '0.6rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
+            这里就是稀有鱼图鉴。你当前还没解锁稀有鱼，所以这里暂时为空。
+          </p>
+        )}
+      </div>
 
       {records.length === 0 ? (
         <div className="card">

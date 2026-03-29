@@ -145,8 +145,22 @@ button.secondary {
 }
 
 .progress-segment.is-filled {
-  background: linear-gradient(180deg, #67e8f9 0%, #38bdf8 60%, #0ea5e9 100%);
-  box-shadow: 0 0 6px rgba(56, 189, 248, 0.45);
+  box-shadow: 0 0 6px rgba(56, 189, 248, 0.35);
+}
+
+.progress-segment.is-filled.is-good {
+  background: linear-gradient(180deg, #86efac 0%, #4ade80 60%, #16a34a 100%);
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.35);
+}
+
+.progress-segment.is-filled.is-warn {
+  background: linear-gradient(180deg, #fde68a 0%, #fbbf24 60%, #d97706 100%);
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.32);
+}
+
+.progress-segment.is-filled.is-bad {
+  background: linear-gradient(180deg, #fca5a5 0%, #f87171 60%, #dc2626 100%);
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.3);
 }
 
 .card {

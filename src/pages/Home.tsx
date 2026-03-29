@@ -75,7 +75,7 @@ export function Home() {
       <div className="card">
         <div className="home-actions">
           <Link to="/records">
-            <button type="button" className="secondary">记录</button>
+            <button type="button" className="secondary">记录 / 图鉴</button>
           </Link>
           <Link to="/settings">
             <button type="button" className="secondary">设置</button>

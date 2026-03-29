@@ -33,6 +33,8 @@ type WindowStats = {
   currentBadStreak: number
 }
 
+type SegmentState = 'good' | 'warn' | 'bad'
+
 const FISH_WINDOW_SECONDS = 15
 const RARE_FISH_NAMES = ['晨光蝶尾', '静海流金', '银月纱鳍', '晚霞星鳞']
 
@@ -131,6 +133,7 @@ export function Reading() {
   const statsRef = useRef<WindowStats>({ activeSeconds: 0, quietSeconds: 0, badSeconds: 0, worstBadStreak: 0, currentBadStreak: 0 })
   const fishCountsRef = useRef<FishCounts>({ normal: 0, good: 0, rare: 0, dead: 0 })
   const rareFishNameRef = useRef<string | null>(null)
+  const segmentStatesRef = useRef<SegmentState[]>(Array.from({ length: 30 }, () => 'bad'))
 
   const [sessionMode, setSessionMode] = useState<GameMode>('positive')
   const [sessionPlayer, setSessionPlayer] = useState('')
@@ -157,6 +160,7 @@ export function Reading() {
     statsRef.current = { activeSeconds: 0, quietSeconds: 0, badSeconds: 0, worstBadStreak: 0, currentBadStreak: 0 }
     fishCountsRef.current = { normal: 0, good: 0, rare: 0, dead: 0 }
     rareFishNameRef.current = null
+    segmentStatesRef.current = Array.from({ length: 30 }, () => 'bad')
     setEffectiveSeconds(0)
     setDisplayFish(0)
     setMeterLevel(0)
@@ -167,6 +171,7 @@ export function Reading() {
   const resetCurrentFish = () => {
     progressRef.current = 0
     statsRef.current = { activeSeconds: 0, quietSeconds: 0, badSeconds: 0, worstBadStreak: 0, currentBadStreak: 0 }
+    segmentStatesRef.current = Array.from({ length: 30 }, () => 'bad')
     setProgressSeconds(0)
   }
 
@@ -220,6 +225,10 @@ export function Reading() {
     const mode = sessionModeRef.current
     const settings = settingsRef.current
     const goodNow = mode === 'study' ? voice.smoothed <= settings.quietThreshold : voice.isActive
+    const warnNow = mode === 'study'
+      ? voice.smoothed <= settings.quietThreshold * 1.35
+      : voice.smoothed >= settings.activeThreshold * 0.55
+    const segmentState: SegmentState = goodNow ? 'good' : warnNow ? 'warn' : 'bad'
 
     setUiStatus(goodNow ? 'active' : 'quiet')
 
@@ -227,6 +236,9 @@ export function Reading() {
     setEffectiveSeconds(effectiveRef.current)
 
     progressRef.current = Math.min(FISH_WINDOW_SECONDS, progressRef.current + dt)
+
+    const segmentIndex = Math.min(29, Math.floor((progressRef.current / FISH_WINDOW_SECONDS) * 30))
+    segmentStatesRef.current[segmentIndex] = segmentState
 
     if (goodNow) {
       statsRef.current.currentBadStreak = 0
@@ -328,7 +340,8 @@ export function Reading() {
           <div className="progress-wrap progress-segments" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100}>
             {Array.from({ length: progressSegments }).map((_, i) => {
               const filled = progressPct >= ((i + 1) / progressSegments) * 100
-              return <span key={i} className={`progress-segment ${filled ? 'is-filled' : ''}`} />
+              const state = segmentStatesRef.current[i]
+              return <span key={i} className={`progress-segment ${filled ? `is-filled is-${state}` : ''}`} />
             })}
           </div>
           <p style={{ margin: '0.7rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>

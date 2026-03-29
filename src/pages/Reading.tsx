@@ -66,16 +66,16 @@ function summarizeFish(counts: FishCounts) {
 
 function classifyFish(mode: GameMode, stats: WindowStats): Exclude<FishTier, 'superRare'> {
   if (mode === 'study') {
-    if (stats.badSeconds >= 5 || stats.worstBadStreak >= 2.2) return 'dead'
-    if (stats.quietSeconds >= 14) return 'rare'
-    if (stats.quietSeconds >= 10.5) return 'good'
-    return 'normal'
+    if (stats.quietSeconds >= 13.5) return 'rare'
+    if (stats.quietSeconds >= 9) return 'good'
+    if (stats.quietSeconds >= 3.5) return 'normal'
+    return 'dead'
   }
 
-  if (stats.badSeconds >= 6 || stats.worstBadStreak >= 3.2) return 'dead'
-  if (stats.activeSeconds >= 13) return 'rare'
-  if (stats.activeSeconds >= 9.5) return 'good'
-  return 'normal'
+  if (stats.activeSeconds >= 12.5) return 'rare'
+  if (stats.activeSeconds >= 8) return 'good'
+  if (stats.activeSeconds >= 3) return 'normal'
+  return 'dead'
 }
 
 function qualityText(mode: GameMode, tier: Exclude<FishTier, 'superRare'> | null) {

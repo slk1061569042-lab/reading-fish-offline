@@ -14,7 +14,6 @@ type Fish = {
   h: number
   hue: number
   glow: string
-  hiddenUntil?: number
 }
 
 type Shark = {
@@ -274,16 +273,11 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
 
       for (const shark of sharks) {
         shark.phase += dt * 0.045
-        const prey = fishList.find((f) => (f.tier === 'normal' || f.tier === 'good' || f.tier === 'rare' || f.tier === 'superRare') && (!f.hiddenUntil || f.hiddenUntil < now))
+        const prey = fishList.find((f) => f.tier === 'normal' || f.tier === 'good' || f.tier === 'rare' || f.tier === 'superRare')
         if (prey) {
           shark.vx += Math.sign(prey.x - shark.x) * 0.012
           shark.vx = Math.max(-1.2, Math.min(1.2, shark.vx))
           shark.y += Math.sign(prey.y - shark.y) * 0.18 * dt
-          if (Math.abs(shark.x - prey.x) < shark.size * 0.3 && Math.abs(shark.y - prey.y) < shark.size * 0.18) {
-            prey.hiddenUntil = now + 1200
-            prey.x = Math.random() * (w - 40) + 20
-            prey.y = Math.random() * (h * 0.58) + h * 0.14
-          }
         }
         shark.x += shark.vx * dt
         shark.y += Math.sin(shark.phase) * 0.18 * dt
@@ -291,8 +285,6 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
       }
 
       for (const f of fishList) {
-        if (f.hiddenUntil && f.hiddenUntil > now) continue
-
         if (f.tier === 'dead') {
           f.phase += dt * 0.03
           const surfaceY = h * 0.12 + Math.sin(f.phase) * 3

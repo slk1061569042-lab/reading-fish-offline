@@ -26,6 +26,8 @@ export type ReadingRecord = {
   mode?: GameMode
   fishAtStart?: number
   fishAtEnd?: number
+  rareFishName?: string
+  rareFishUnlocked?: boolean
 }
 
 export type AppSaveV2 = {
@@ -82,9 +84,7 @@ function clampSettings(s: Partial<GameSettings>): GameSettings {
     quietThreshold: quiet,
     quietHoldMs: Math.round(clampNum(s.quietHoldMs, DEFAULT_SETTINGS.quietHoldMs, 100, 3000)),
     fishEverySeconds: clampNum(s.fishEverySeconds, DEFAULT_SETTINGS.fishEverySeconds, 3, 120),
-    reverseInitialFish: Math.round(
-      clampNum(s.reverseInitialFish, DEFAULT_SETTINGS.reverseInitialFish, 0, 24),
-    ),
+    reverseInitialFish: Math.round(clampNum(s.reverseInitialFish, DEFAULT_SETTINGS.reverseInitialFish, 0, 24)),
   }
 }
 
@@ -216,6 +216,7 @@ export function recordStats(records: ReadingRecord[]) {
   const reverseSessions = records.filter((r) => r.mode === 'reverse').length
   const studySessions = records.filter((r) => r.mode === 'study').length
   const positiveSessions = records.filter((r) => r.mode === 'positive' || r.mode === undefined).length
+  const rareFishSessions = records.filter((r) => r.rareFishUnlocked).length
   return {
     sessionCount: records.length,
     totalFish,
@@ -223,5 +224,6 @@ export function recordStats(records: ReadingRecord[]) {
     reverseSessions,
     studySessions,
     positiveSessions,
+    rareFishSessions,
   }
 }

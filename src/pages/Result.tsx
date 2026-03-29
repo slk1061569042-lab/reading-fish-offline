@@ -12,6 +12,9 @@ export type ResultLocationState = {
   mode: GameMode
   fishAtStart?: number
   fishAtEnd?: number
+  rareFishUnlocked?: boolean
+  rareFishName?: string
+  rareFishBroken?: boolean
 }
 
 function formatDuration(sec: number): string {
@@ -28,11 +31,10 @@ function modeLabel(mode: GameMode): string {
 }
 
 function stageLabel(sec: number) {
-  if (sec >= 1200) return '鱼缸升级'
-  if (sec >= 900) return '发光鱼'
-  if (sec >= 600) return '大鱼出现'
-  if (sec >= 300) return '小鱼群'
-  if (sec >= 180) return '鱼苗'
+  if (sec >= 1200) return '超长坚持'
+  if (sec >= 900) return '长时专注'
+  if (sec >= 600) return '稳定鱼群'
+  if (sec >= 300) return '进入节奏'
   return '起步中'
 }
 
@@ -54,6 +56,8 @@ export function Result() {
       mode: data.mode,
       fishAtStart: data.fishAtStart,
       fishAtEnd: data.fishAtEnd,
+      rareFishUnlocked: data.rareFishUnlocked,
+      rareFishName: data.rareFishName,
     })
   }, [data])
 
@@ -85,13 +89,18 @@ export function Result() {
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <AquariumTank fishCount={showFish} />
         <div style={{ padding: '1rem' }}>
-          <p style={{ margin: 0, fontSize: '1.1rem' }}><strong>{data.fishEarned}</strong> 条鱼</p>
-          <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
-            有效时长 {formatDuration(data.effectiveSeconds)}
-          </p>
-          <p style={{ margin: '0.35rem 0 0', color: 'var(--accent-soft)', fontSize: '0.9rem', fontWeight: 600 }}>
-            达成节点：{stageLabel(data.effectiveSeconds)}
-          </p>
+          <p style={{ margin: 0, fontSize: '1.1rem' }}><strong>{data.fishEarned}</strong> 条普通鱼</p>
+          <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>有效时长 {formatDuration(data.effectiveSeconds)}</p>
+          <p style={{ margin: '0.35rem 0 0', color: 'var(--accent-soft)', fontSize: '0.9rem', fontWeight: 600 }}>达成阶段：{stageLabel(data.effectiveSeconds)}</p>
+          {data.rareFishUnlocked ? (
+            <p style={{ margin: '0.35rem 0 0', color: 'var(--sand)', fontSize: '0.92rem', fontWeight: 700 }}>
+              解锁稀有鱼：{data.rareFishName}
+            </p>
+          ) : data.mode === 'study' ? (
+            <p style={{ margin: '0.35rem 0 0', color: data.rareFishBroken ? 'var(--warn)' : 'var(--muted)', fontSize: '0.9rem' }}>
+              {data.rareFishBroken ? '中途有声音打断，本轮未拿到稀有鱼。' : '本轮未达到 20 分钟连续安静。'}
+            </p>
+          ) : null}
           {reverseDelta !== null && (
             <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
               守护结果：起始 {data.fishAtStart} 条 → 结束 {data.fishAtEnd} 条（{reverseDelta >= 0 ? '+' : ''}{reverseDelta}）

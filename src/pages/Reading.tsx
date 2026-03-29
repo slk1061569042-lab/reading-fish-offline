@@ -16,6 +16,9 @@ import { loadProfile, loadSettings, type GameMode, type GameSettings } from '../
 
 export type ReadingStatus = 'idle' | 'requesting' | 'active' | 'quiet' | 'error'
 
+const STUDY_RARE_SECONDS = 20 * 60
+const RARE_FISH_NAMES = ['晨光蝶尾', '静海流金', '银月纱鳍', '晚霞星鳞']
+
 function statusLabel(s: ReadingStatus): string {
   switch (s) {
     case 'idle': return '待命'
@@ -27,10 +30,6 @@ function statusLabel(s: ReadingStatus): string {
   }
 }
 
-function statusClass(s: ReadingStatus): string {
-  return s
-}
-
 function modeUiLabel(m: GameMode): string {
   switch (m) {
     case 'reverse': return '守护模式'
@@ -40,12 +39,16 @@ function modeUiLabel(m: GameMode): string {
 }
 
 function evolutionStage(sec: number) {
-  if (sec >= 1200) return '鱼缸升级'
-  if (sec >= 900) return '发光鱼'
-  if (sec >= 600) return '大鱼出现'
-  if (sec >= 300) return '小鱼群'
-  if (sec >= 180) return '鱼苗'
+  if (sec >= 1200) return '稀有鱼判定完成'
+  if (sec >= 900) return '长时专注区'
+  if (sec >= 600) return '稳定鱼群'
+  if (sec >= 300) return '进入节奏'
   return '起步中'
+}
+
+function pickRareFishName(sec: number): string {
+  const idx = Math.floor(sec / 37) % RARE_FISH_NAMES.length
+  return RARE_FISH_NAMES[idx]!
 }
 
 export type ReadingResultPayload = {
@@ -57,6 +60,9 @@ export type ReadingResultPayload = {
   mode: GameMode
   fishAtStart?: number
   fishAtEnd?: number
+  rareFishUnlocked?: boolean
+  rareFishName?: string
+  rareFishBroken?: boolean
 }
 
 export function Reading() {
@@ -76,6 +82,9 @@ export function Reading() {
   const quietAccRef = useRef(0)
   const effectiveRef = useRef(0)
   const meterAccRef = useRef(0)
+  const rareBrokenRef = useRef(false)
+  const rareUnlockedRef = useRef(false)
+  const rareFishNameRef = useRef<string | null>(null)
 
   const [sessionMode, setSessionMode] = useState<GameMode>('positive')
   const [sessionPlayer, setSessionPlayer] = useState('')
@@ -83,6 +92,8 @@ export function Reading() {
   const [displayFish, setDisplayFish] = useState(0)
   const [loopOn, setLoopOn] = useState(false)
   const [meterLevel, setMeterLevel] = useState(0)
+  const [rareBroken, setRareBroken] = useState(false)
+  const [rareUnlocked, setRareUnlocked] = useState(false)
 
   const cleanupMic = useCallback(() => {
     stopMicPipeline(pipelineRef.current)
@@ -108,6 +119,12 @@ export function Reading() {
     setSessionPlayer(profile.playerName)
     voiceRef.current = createVoiceStateMachine(audioConfigFromGameSettings(settings))
 
+    rareBrokenRef.current = false
+    rareUnlockedRef.current = false
+    rareFishNameRef.current = null
+    setRareBroken(false)
+    setRareUnlocked(false)
+
     try {
       const pipeline = await startMicPipeline(audioConfigFromGameSettings(settings))
       pipelineRef.current = pipeline
@@ -126,7 +143,7 @@ export function Reading() {
       studyFishRef.current = 0
       setDisplayFish(mode === 'reverse' ? startFish : 0)
 
-      setUiStatus(mode === 'study' ? 'quiet' : 'quiet')
+      setUiStatus('quiet')
       setLoopOn(true)
     } catch (e) {
       const msg = e instanceof Error ? e.message : '无法访问麦克风'
@@ -170,8 +187,18 @@ export function Reading() {
         }
         studyFishRef.current = fish
         setDisplayFish(fish)
+
+        if (!rareUnlockedRef.current && !rareBrokenRef.current && next >= STUDY_RARE_SECONDS) {
+          rareUnlockedRef.current = true
+          rareFishNameRef.current = pickRareFishName(next)
+          setRareUnlocked(true)
+        }
       } else {
         setUiStatus('quiet')
+        if (!rareUnlockedRef.current && effectiveRef.current > 0) {
+          rareBrokenRef.current = true
+          setRareBroken(true)
+        }
         quietAccRef.current = 0
       }
       return
@@ -223,8 +250,11 @@ export function Reading() {
     const playerName = sessionPlayerRef.current
     const fishAtStart = fishAtStartRef.current
     const positiveFish = Math.floor(effective / settings.fishEverySeconds)
-    const fishAtEnd =
-      mode === 'positive' ? positiveFish : mode === 'study' ? Math.max(0, Math.round(studyFishRef.current)) : Math.max(0, Math.round(reverseFishRef.current))
+    const fishAtEnd = mode === 'positive'
+      ? positiveFish
+      : mode === 'study'
+        ? Math.max(0, Math.round(studyFishRef.current))
+        : Math.max(0, Math.round(reverseFishRef.current))
 
     const payload: ReadingResultPayload = {
       startedAt,
@@ -235,6 +265,9 @@ export function Reading() {
       mode,
       fishAtStart: fishAtStart ?? undefined,
       fishAtEnd,
+      rareFishUnlocked: rareUnlockedRef.current,
+      rareFishName: rareFishNameRef.current ?? undefined,
+      rareFishBroken: rareBrokenRef.current,
     }
 
     cleanupMic()
@@ -246,6 +279,8 @@ export function Reading() {
     recoverAccRef.current = 0
     setEffectiveSeconds(0)
     setDisplayFish(0)
+    setRareBroken(false)
+    setRareUnlocked(false)
 
     navigate('/result', { state: payload })
   }, [cleanupMic, navigate])
@@ -261,25 +296,36 @@ export function Reading() {
     recoverAccRef.current = 0
     studyFishRef.current = 0
     reverseFishRef.current = 0
+    rareBrokenRef.current = false
+    rareUnlockedRef.current = false
+    rareFishNameRef.current = null
     setEffectiveSeconds(0)
     setDisplayFish(0)
     setMeterLevel(0)
+    setRareBroken(false)
+    setRareUnlocked(false)
   }, [cleanupMic])
 
   const fishEvery = settingsRef.current.fishEverySeconds
-  const progressPct = Math.min(100, ((effectiveSeconds % fishEvery) / fishEvery) * 100)
-  const subtitle =
-    sessionMode === 'positive'
-      ? `继续朗读，满 ${fishEvery} 秒得鱼`
-      : sessionMode === 'reverse'
-        ? '保持朗读来守住鱼缸，安静太久会掉鱼'
-        : '保持安静专注，稳定自习会慢慢长鱼'
+  const progressPct = sessionMode === 'study'
+    ? Math.min(100, (effectiveSeconds / STUDY_RARE_SECONDS) * 100)
+    : Math.min(100, ((effectiveSeconds % fishEvery) / fishEvery) * 100)
+
+  const subtitle = sessionMode === 'positive'
+    ? `继续朗读，满 ${fishEvery} 秒得鱼`
+    : sessionMode === 'reverse'
+      ? '保持朗读来守住鱼缸，安静太久会掉鱼'
+      : rareUnlocked
+        ? `已解锁稀有鱼：${rareFishNameRef.current}`
+        : rareBroken
+          ? '本轮稀有鱼资格已中断，本节只能收获普通鱼'
+          : `连续安静满 20 分钟可得稀有鱼，还差 ${Math.max(0, STUDY_RARE_SECONDS - effectiveSeconds).toFixed(0)} 秒`
 
   return (
     <>
       <header>
         <h1 className="page-title">{sessionPlayer || '未命名玩家'}｜{modeUiLabel(sessionMode)}</h1>
-        <div className={`status-pill ${statusClass(uiStatus)}`} role="status" aria-live="polite" style={{ marginTop: '0.5rem' }}>
+        <div className={`status-pill ${uiStatus}`} role="status" aria-live="polite" style={{ marginTop: '0.5rem' }}>
           <span className="dot" />
           {statusLabel(uiStatus)}
         </div>
@@ -292,7 +338,7 @@ export function Reading() {
         <div style={{ padding: '0.75rem 1rem 1rem' }}>
           <VolumeMeter level={meterLevel} activeThreshold={settingsRef.current.activeThreshold} quietThreshold={settingsRef.current.quietThreshold} />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', margin: '0.85rem 0 0.35rem' }}>
-            <span>{sessionMode === 'study' ? '安静成长进度' : '本轮成长进度'}</span>
+            <span>{sessionMode === 'study' ? '稀有鱼进度' : '本轮成长进度'}</span>
             <span>{effectiveSeconds.toFixed(1)}s</span>
           </div>
           <div className="progress-wrap" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100}>
@@ -302,15 +348,15 @@ export function Reading() {
             累计有效时长 {effectiveSeconds.toFixed(1)} 秒 · 当前 {displayFish} 条鱼
           </p>
           <p style={{ margin: '0.25rem 0 0', color: 'var(--accent-soft)', fontSize: '0.88rem', fontWeight: 600 }}>
-            当前节点：{evolutionStage(effectiveSeconds)}
+            当前阶段：{evolutionStage(effectiveSeconds)}
           </p>
-          <p style={{ margin: '0.25rem 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>{subtitle}</p>
+          <p style={{ margin: '0.25rem 0 0', color: rareBroken ? 'var(--warn)' : 'var(--muted)', fontSize: '0.85rem' }}>{subtitle}</p>
         </div>
       </div>
 
       <div className="card">
         <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
-          节点进化：3 分钟鱼苗，5 分钟小鱼群，10 分钟大鱼，15 分钟发光鱼，20 分钟鱼缸升级。
+          自习模式规则：连续安静 20 分钟得 1 条稀有鱼；一旦中断，本轮只保留普通鱼收益。
         </p>
       </div>
 

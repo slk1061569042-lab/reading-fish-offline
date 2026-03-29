@@ -125,18 +125,25 @@ export function Result() {
           <li>死鱼合成：{data.battleReport.deadFishCombined} 条 → 怨念鲨鱼 {data.battleReport.sharksSummoned} 条</li>
           <li>稀有鱼合体：{data.battleReport.rareFishCombined} 条 → 超级稀有鱼 {data.battleReport.superRareSummoned} 条</li>
           <li>鲨鱼击杀：{data.battleReport.sharksDefeated} 条</li>
-          <li>被吃掉：普通鱼 {data.battleReport.fishEaten.normal} · 优质鱼 {data.battleReport.fishEaten.good} · 稀有鱼 {data.battleReport.fishEaten.rare}</li>
+          <li>超级稀有鱼阵亡：{data.battleReport.superRareDefeated} 条</li>
+          <li>被吃掉：普通鱼 {data.battleReport.fishEaten.normal} · 优质鱼 {data.battleReport.fishEaten.good} · 稀有鱼 {data.battleReport.fishEaten.rare} · 超级稀有鱼 {data.battleReport.fishEaten.superRare}</li>
         </ul>
-        <div style={{ display: 'grid', gap: '0.4rem', marginTop: '0.8rem' }}>
-          {data.battleReport.log.map((line, idx) => (
-            <div key={idx} style={{ fontSize: '0.86rem', color: 'var(--muted)', padding: '0.45rem 0.55rem', borderRadius: 10, background: 'rgba(2, 132, 199, 0.08)' }}>{line}</div>
-          ))}
+        <div style={{ display: 'grid', gap: '0.45rem', marginTop: '0.8rem' }}>
+          {data.battleReport.log.map((line, idx) => {
+            const eaten = line.includes('吃掉') || line.includes('吞掉')
+            return (
+              <div key={idx} style={{ fontSize: '0.86rem', color: eaten ? 'var(--danger)' : 'var(--muted)', padding: '0.45rem 0.55rem', borderRadius: 10, background: eaten ? 'rgba(248,113,113,0.12)' : 'rgba(2, 132, 199, 0.08)' }}>
+                {eaten ? `💥 ${line}` : line}
+              </div>
+            )
+          })}
         </div>
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
         <Link to="/"><button type="button">回首页</button></Link>
         <button type="button" className="secondary" onClick={() => navigate('/records')}>查看记录</button>
+        <button type="button" className="secondary" onClick={() => navigate('/bestiary')}>打开图鉴</button>
       </div>
     </>
   )

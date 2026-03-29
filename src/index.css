@@ -423,3 +423,96 @@ button.secondary {
 .floating-actions button {
   min-width: 5.25rem;
 }
+
+.bestiary-grid {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.bestiary-card {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 0.8rem;
+  align-items: center;
+}
+
+.bestiary-card.is-locked {
+  opacity: 0.88;
+}
+
+.bestiary-card__art {
+  position: relative;
+  min-height: 92px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+  border: 1px solid rgba(125, 211, 252, 0.14);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.bestiary-card__lock {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  font-weight: 800;
+  color: rgba(255,255,255,0.7);
+  background: rgba(2, 6, 23, 0.28);
+}
+
+.bestiary-silhouette {
+  width: 58px;
+  height: 28px;
+  border-radius: 999px 999px 999px 999px / 70% 70% 70% 70%;
+  background: rgba(255,255,255,0.78);
+  position: relative;
+  filter: drop-shadow(0 6px 12px rgba(0,0,0,0.18));
+}
+
+.bestiary-silhouette::before {
+  content: '';
+  position: absolute;
+  left: -18px;
+  top: 5px;
+  width: 22px;
+  height: 18px;
+  clip-path: polygon(100% 50%, 0 0, 0 100%);
+  background: inherit;
+}
+
+.bestiary-silhouette.kind-good { background: #67e8f9; }
+.bestiary-silhouette.kind-rare { background: #fde68a; }
+.bestiary-silhouette.kind-superRare { background: #d946ef; width: 68px; height: 32px; }
+.bestiary-silhouette.kind-dead { background: #cbd5e1; transform: rotate(18deg); }
+.bestiary-silhouette.kind-shark { background: #94a3b8; width: 72px; height: 30px; }
+.bestiary-silhouette.kind-shark::after {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: 28px;
+  width: 18px;
+  height: 18px;
+  clip-path: polygon(50% 0, 0 100%, 100% 100%);
+  background: inherit;
+}
+
+.bestiary-card__body {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.bestiary-card__top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.bestiary-card__top span,
+.bestiary-card__time,
+.bestiary-card__desc {
+  color: var(--muted);
+  font-size: 0.84rem;
+}

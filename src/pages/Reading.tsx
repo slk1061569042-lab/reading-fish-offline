@@ -99,10 +99,10 @@ function qualityText(mode: GameMode, tier: Exclude<FishTier, 'superRare'> | null
 
 function buildBattle(counts: FishCounts): BattleReport {
   const log: string[] = []
-  const fishEaten = { normal: 0, good: 0, rare: 0 }
+  const fishEaten = { normal: 0, good: 0, rare: 0, superRare: 0 }
   const sharksSummoned = Math.floor(counts.dead / 10)
   const deadFishCombined = sharksSummoned * 10
-  let deadLeft = counts.dead - deadFishCombined
+  const deadLeft = counts.dead - deadFishCombined
   let normal = counts.normal
   let good = counts.good
   let rare = counts.rare
@@ -112,29 +112,48 @@ function buildBattle(counts: FishCounts): BattleReport {
   const superRareSummoned = superRare
   let shark = sharksSummoned
   let sharksDefeated = 0
+  let superRareDefeated = 0
 
   if (sharksSummoned > 0) log.push(`10 条死鱼合成规则触发，召出 ${sharksSummoned} 条怨念鲨鱼`)
-  if (superRareSummoned > 0) log.push(`10 条稀有鱼合体，生成 ${superRareSummoned} 条超级稀有鱼`)
+  if (superRareSummoned > 0) log.push(`10 条稀有鱼合体，生成 ${superRareSummoned} 条超级稀有鱼，并从稀有鱼数量中真实扣除 ${rareFishCombined} 条`)
 
   for (let i = 0; i < shark; i++) {
-    let hp = 8
-    const superAttacks = Math.min(superRare, 2)
-    if (superAttacks > 0) {
-      hp -= superAttacks * 4
-      log.push(`超级稀有鱼集火怨念鲨鱼 #${i + 1}，造成 ${superAttacks * 4} 点伤害`)
+    let sharkHp = 8
+    let resolved = false
+
+    if (superRare > 0) {
+      const damage = Math.min(superRare, 2) * 4
+      sharkHp -= damage
+      log.push(`超级稀有鱼围攻怨念鲨鱼 #${i + 1}，造成 ${damage} 点伤害`)
+      if (sharkHp <= 0) {
+        sharksDefeated += 1
+        resolved = true
+        log.push(`怨念鲨鱼 #${i + 1} 被超级稀有鱼击杀`)
+      }
     }
-    if (hp > 0 && rare > 0) {
-      const rareAttacks = Math.min(rare, 2)
-      hp -= rareAttacks * 2
-      log.push(`稀有鱼反击怨念鲨鱼 #${i + 1}，造成 ${rareAttacks * 2} 点伤害`)
+
+    if (!resolved && rare > 0) {
+      const damage = Math.min(rare, 2) * 2
+      sharkHp -= damage
+      log.push(`稀有鱼反击怨念鲨鱼 #${i + 1}，造成 ${damage} 点伤害`)
+      if (sharkHp <= 0) {
+        sharksDefeated += 1
+        resolved = true
+        log.push(`怨念鲨鱼 #${i + 1} 被鱼群击杀`)
+      }
     }
-    if (hp <= 0) {
-      sharksDefeated += 1
-      log.push(`怨念鲨鱼 #${i + 1} 被击杀`)
+
+    if (resolved) continue
+
+    if (superRare > 0) {
+      superRare -= 1
+      fishEaten.superRare += 1
+      superRareDefeated += 1
+      log.push(`怨念鲨鱼 #${i + 1} 与超级稀有鱼缠斗后，吞掉 1 条超级稀有鱼`)
       continue
     }
 
-    const eatPriority: Array<keyof typeof fishEaten> = ['normal', 'good', 'rare']
+    const eatPriority: Array<'normal' | 'good' | 'rare'> = ['normal', 'good', 'rare']
     let ate = false
     for (const target of eatPriority) {
       if (target === 'normal' && normal > 0) {
@@ -170,6 +189,7 @@ function buildBattle(counts: FishCounts): BattleReport {
     sharksSummoned,
     superRareSummoned,
     sharksDefeated,
+    superRareDefeated,
     fishEaten,
     finalCounts: {
       normal,

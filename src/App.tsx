@@ -5,6 +5,7 @@ import { Reading } from './pages/Reading'
 import { Records } from './pages/Records'
 import { Result } from './pages/Result'
 import { Settings } from './pages/Settings'
+import { Bestiary } from './pages/Bestiary'
 
 export default function App() {
   return (
@@ -14,6 +15,7 @@ export default function App() {
         <Route path="reading" element={<Reading />} />
         <Route path="result" element={<Result />} />
         <Route path="records" element={<Records />} />
+        <Route path="bestiary" element={<Bestiary />} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

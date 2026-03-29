@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AquariumTank } from '../components/AquariumTank'
 import { RareFishCard } from '../components/RareFishCard'
-import { appendRecord, type GameMode } from '../modules/storage'
+import { appendRecord, type FishResult, type GameMode } from '../modules/storage'
 
 export type ResultLocationState = {
   startedAt: string
@@ -13,6 +13,7 @@ export type ResultLocationState = {
   goodFish: number
   rareFish: number
   deadFish: number
+  fishResults: FishResult[]
   playerName: string
   mode: GameMode
   fishAtStart?: number
@@ -35,6 +36,15 @@ function modeLabel(mode: GameMode): string {
   return '早读养鱼'
 }
 
+function tierLabel(tier: FishResult['tier']) {
+  switch (tier) {
+    case 'rare': return '稀有鱼'
+    case 'good': return '优质鱼'
+    case 'dead': return '死鱼 / 怨念鲨鱼'
+    default: return '普通鱼'
+  }
+}
+
 export function Result() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -53,6 +63,7 @@ export function Result() {
       goodFish: data.goodFish,
       rareFish: data.rareFish,
       deadFish: data.deadFish,
+      fishResults: data.fishResults,
       playerName: data.playerName,
       mode: data.mode,
       fishAtStart: data.fishAtStart,
@@ -63,22 +74,14 @@ export function Result() {
   }, [data])
 
   if (!data) {
-    return (
-      <>
-        <h1 className="page-title">暂无结果</h1>
-        <p style={{ color: 'var(--muted)' }}>请先完成一次会话。</p>
-        <Link to="/"><button type="button">回首页</button></Link>
-      </>
-    )
+    return <><h1 className="page-title">暂无结果</h1><p style={{ color: 'var(--muted)' }}>请先完成一次会话。</p><Link to="/"><button type="button">回首页</button></Link></>
   }
 
   return (
     <>
       <header>
         <h1 className="page-title">本次收获</h1>
-        <p style={{ color: 'var(--muted)', margin: '0.35rem 0 0', fontSize: '0.95rem' }}>
-          {data.playerName || '未命名玩家'} · {modeLabel(data.mode)} · 已保存到本地记录。
-        </p>
+        <p style={{ color: 'var(--muted)', margin: '0.35rem 0 0', fontSize: '0.95rem' }}>{data.playerName || '未命名玩家'} · {modeLabel(data.mode)} · 已保存到本地记录。</p>
       </header>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -86,24 +89,31 @@ export function Result() {
         <div style={{ padding: '1rem' }}>
           <p style={{ margin: 0, fontSize: '1.1rem' }}><strong>{data.fishEarned}</strong> 条结果</p>
           <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>总时长 {formatDuration(data.effectiveSeconds)}</p>
-          <p style={{ margin: '0.35rem 0 0', color: 'var(--accent-soft)', fontSize: '0.9rem', fontWeight: 600 }}>
-            普通鱼 {data.normalFish} · 优质鱼 {data.goodFish} · 稀有鱼 {data.rareFish} · 死鱼 {data.deadFish}
-          </p>
-          {data.rareFishUnlocked && data.rareFishName ? (
-            <div style={{ marginTop: '0.75rem' }}>
-              <RareFishCard name={data.rareFishName} subtitle="本轮首条稀有鱼" />
+          <p style={{ margin: '0.35rem 0 0', color: 'var(--accent-soft)', fontSize: '0.9rem', fontWeight: 600 }}>普通鱼 {data.normalFish} · 优质鱼 {data.goodFish} · 稀有鱼 {data.rareFish} · 死鱼 {data.deadFish}</p>
+          {data.rareFishUnlocked && data.rareFishName ? <div style={{ marginTop: '0.75rem' }}><RareFishCard name={data.rareFishName} subtitle="本轮首条稀有鱼" /></div> : null}
+        </div>
+      </div>
+
+      <div className="card">
+        <strong>本轮生成详情</strong>
+        <div style={{ display: 'grid', gap: '0.65rem', marginTop: '0.75rem' }}>
+          {data.fishResults.map((result, idx) => (
+            <div key={idx} style={{ border: '1px solid rgba(125,211,252,0.14)', borderRadius: 12, padding: '0.65rem 0.75rem', background: 'rgba(3,25,39,0.18)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', alignItems: 'center' }}>
+                <strong>第 {idx + 1} 条：{tierLabel(result.tier)}</strong>
+                {result.rareFishName ? <span style={{ color: 'var(--sand)', fontSize: '0.82rem)' }}>{result.rareFishName}</span> : null}
+              </div>
+              <div className="progress-wrap progress-segments" style={{ marginTop: '0.45rem' }}>
+                {result.segments.map((seg, i) => <span key={i} className={`progress-segment is-filled is-${seg}`} />)}
+              </div>
             </div>
-          ) : null}
+          ))}
         </div>
       </div>
 
       <div className="card">
         <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
-          {data.mode === 'study'
-            ? '自习养鱼按固定 15 秒结算，干扰严重会生成死鱼。'
-            : data.mode === 'positive'
-              ? '早读养鱼按固定 15 秒结算，朗读质量过差会生成死鱼。'
-              : '守护鱼缸仍保留兼容展示。'}
+          {data.mode === 'study' ? '自习养鱼按固定 15 秒结算，干扰严重会生成死鱼并召出怨念鲨鱼。' : data.mode === 'positive' ? '早读养鱼按固定 15 秒结算，朗读质量过差会生成死鱼并召出怨念鲨鱼。' : '守护鱼缸仍保留兼容展示。'}
         </p>
       </div>
 

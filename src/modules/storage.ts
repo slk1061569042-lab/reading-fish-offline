@@ -1,6 +1,14 @@
 /** Local persistence: profile, tunable settings, and session records. Migrates legacy v1 records key. */
 
 export type GameMode = 'positive' | 'reverse' | 'study'
+export type SegmentState = 'good' | 'warn' | 'bad'
+export type FishTier = 'normal' | 'good' | 'rare' | 'dead'
+
+export type FishResult = {
+  tier: FishTier
+  rareFishName?: string
+  segments: SegmentState[]
+}
 
 export type UserProfile = {
   playerName: string
@@ -26,6 +34,7 @@ export type ReadingRecord = {
   goodFish?: number
   rareFish?: number
   deadFish?: number
+  fishResults?: FishResult[]
   playerName?: string
   mode?: GameMode
   fishAtStart?: number
@@ -60,6 +69,20 @@ export const DEFAULT_SETTINGS: GameSettings = {
 
 function uid(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+}
+
+function isSegmentState(x: unknown): x is SegmentState {
+  return x === 'good' || x === 'warn' || x === 'bad'
+}
+
+function isFishTier(x: unknown): x is FishTier {
+  return x === 'normal' || x === 'good' || x === 'rare' || x === 'dead'
+}
+
+function isFishResult(x: unknown): x is FishResult {
+  if (!x || typeof x !== 'object') return false
+  const o = x as Record<string, unknown>
+  return isFishTier(o.tier) && Array.isArray(o.segments) && o.segments.every(isSegmentState)
 }
 
 function isRecord(x: unknown): x is ReadingRecord {
@@ -103,6 +126,13 @@ function normalizeProfile(p: Partial<UserProfile> | undefined): UserProfile {
   return { playerName: name.trim(), mode }
 }
 
+function normalizeRecord(r: ReadingRecord): ReadingRecord {
+  return {
+    ...r,
+    fishResults: Array.isArray(r.fishResults) ? r.fishResults.filter(isFishResult) : undefined,
+  }
+}
+
 function parseSave(raw: string | null): AppSaveV2 | null {
   if (!raw) return null
   try {
@@ -110,7 +140,7 @@ function parseSave(raw: string | null): AppSaveV2 | null {
     if (!parsed || typeof parsed !== 'object') return null
     const o = parsed as Record<string, unknown>
     if (o.v !== 2) return null
-    const records = Array.isArray(o.records) ? o.records.filter(isRecord) : []
+    const records = Array.isArray(o.records) ? o.records.filter(isRecord).map(normalizeRecord) : []
     const profile = normalizeProfile(o.profile as Partial<UserProfile> | undefined)
     const settings = clampSettings((o.settings as Partial<GameSettings>) ?? {})
     return { v: 2, profile, settings, records }
@@ -125,7 +155,7 @@ function loadLegacyRecordsOnly(): ReadingRecord[] {
     if (!raw) return []
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) return []
-    return parsed.filter(isRecord)
+    return parsed.filter(isRecord).map(normalizeRecord)
   } catch {
     return []
   }
@@ -202,7 +232,7 @@ export function loadRecords(): ReadingRecord[] {
 
 export function appendRecord(entry: Omit<ReadingRecord, 'id'>): ReadingRecord {
   const s = loadAppSave()
-  const full: ReadingRecord = { ...entry, id: uid() }
+  const full: ReadingRecord = normalizeRecord({ ...entry, id: uid() })
   s.records = [full, ...s.records]
   persist(s)
   return full

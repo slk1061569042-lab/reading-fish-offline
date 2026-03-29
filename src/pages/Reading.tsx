@@ -25,6 +25,7 @@ type FishCounts = {
 }
 
 const FISH_WINDOW_SECONDS = 15
+const RESET_BACKSTEP_SECONDS = 1.25
 const RARE_FISH_NAMES = ['晨光蝶尾', '静海流金', '银月纱鳍', '晚霞星鳞']
 
 function statusLabel(s: ReadingStatus): string {
@@ -51,15 +52,21 @@ function pickRareFishName(seed: number): string {
   return RARE_FISH_NAMES[idx]!
 }
 
-function qualityText(mode: GameMode, tier: FishTier) {
-  if (mode === 'study') {
-    if (tier === 'rare') return '本轮 15 秒非常安静，结算稀有鱼'
-    if (tier === 'good') return '本轮 15 秒较稳定，结算优质鱼'
-    return '本轮 15 秒有干扰，结算普通鱼'
+function qualityText(mode: GameMode, tier: FishTier | null, broken: boolean) {
+  if (broken) {
+    return mode === 'study' ? '检测到声音超阈值，本条鱼进度已回退' : '检测到朗读掉线，本条鱼进度已回退'
   }
-  if (tier === 'rare') return '本轮 15 秒朗读很稳定，结算稀有鱼'
-  if (tier === 'good') return '本轮 15 秒朗读不错，结算优质鱼'
-  return '本轮 15 秒朗读较弱，结算普通鱼'
+  if (!tier) {
+    return mode === 'study' ? '自习养鱼：连续安静满 15 秒，才会产出更高品质的鱼' : '早读养鱼：连续稳定朗读满 15 秒，才会产出更高品质的鱼'
+  }
+  if (mode === 'study') {
+    if (tier === 'rare') return '本条鱼很安静，结算稀有鱼'
+    if (tier === 'good') return '本条鱼较稳定，结算优质鱼'
+    return '本条鱼有干扰，结算普通鱼'
+  }
+  if (tier === 'rare') return '本条鱼朗读很稳，结算稀有鱼'
+  if (tier === 'good') return '本条鱼朗读不错，结算优质鱼'
+  return '本条鱼朗读一般，结算普通鱼'
 }
 
 function summarizeFish(counts: FishCounts) {
@@ -95,8 +102,7 @@ export function Reading() {
   const sessionPlayerRef = useRef('')
   const effectiveRef = useRef(0)
   const meterAccRef = useRef(0)
-  const windowAccRef = useRef(0)
-  const qualityAccRef = useRef(0)
+  const windowProgressRef = useRef(0)
   const fishCountsRef = useRef<FishCounts>({ normal: 0, good: 0, rare: 0 })
   const rareFishNameRef = useRef<string | null>(null)
 
@@ -108,6 +114,7 @@ export function Reading() {
   const [meterLevel, setMeterLevel] = useState(0)
   const [progressSeconds, setProgressSeconds] = useState(0)
   const [lastTier, setLastTier] = useState<FishTier | null>(null)
+  const [justBroken, setJustBroken] = useState(false)
 
   const cleanupMic = useCallback(() => {
     stopMicPipeline(pipelineRef.current)
@@ -121,8 +128,7 @@ export function Reading() {
   const resetCounters = () => {
     effectiveRef.current = 0
     meterAccRef.current = 0
-    windowAccRef.current = 0
-    qualityAccRef.current = 0
+    windowProgressRef.current = 0
     fishCountsRef.current = { normal: 0, good: 0, rare: 0 }
     rareFishNameRef.current = null
     setEffectiveSeconds(0)
@@ -130,6 +136,7 @@ export function Reading() {
     setMeterLevel(0)
     setProgressSeconds(0)
     setLastTier(null)
+    setJustBroken(false)
   }
 
   const startReading = useCallback(async () => {
@@ -180,41 +187,50 @@ export function Reading() {
 
     const mode = sessionModeRef.current
     const settings = settingsRef.current
-    const isStudyGood = voice.smoothed <= settings.quietThreshold
-    const isReadGood = voice.isActive
-    const goodNow = mode === 'study' ? isStudyGood : isReadGood
+    const goodNow = mode === 'study' ? voice.smoothed <= settings.quietThreshold : voice.isActive
 
     setUiStatus(goodNow ? 'active' : 'quiet')
+    setJustBroken(false)
 
     const nextEffective = effectiveRef.current + dtMs / 1000
     effectiveRef.current = nextEffective
     setEffectiveSeconds(nextEffective)
 
-    windowAccRef.current += dtMs / 1000
-    if (goodNow) qualityAccRef.current += dtMs / 1000
-    setProgressSeconds(Math.min(FISH_WINDOW_SECONDS, windowAccRef.current))
+    if (goodNow) {
+      windowProgressRef.current += dtMs / 1000
+    } else {
+      const next = Math.max(0, windowProgressRef.current - dtMs / 1000 - RESET_BACKSTEP_SECONDS * (dtMs / 1000))
+      if (next !== windowProgressRef.current) setJustBroken(true)
+      windowProgressRef.current = next
+    }
 
-    while (windowAccRef.current >= FISH_WINDOW_SECONDS) {
-      const qualityRatio = qualityAccRef.current / FISH_WINDOW_SECONDS
-      let tier: FishTier = 'normal'
-      if (qualityRatio >= 0.9) tier = 'rare'
-      else if (qualityRatio >= 0.6) tier = 'good'
+    setProgressSeconds(Math.min(FISH_WINDOW_SECONDS, windowProgressRef.current))
+
+    while (windowProgressRef.current >= FISH_WINDOW_SECONDS) {
+      const overshoot = windowProgressRef.current - FISH_WINDOW_SECONDS
+      const qualityRatio = goodNow ? 1 : 0
+      let tier: FishTier = 'good'
+      if (qualityRatio >= 0.95) tier = 'rare'
+      else if (qualityRatio >= 0.7) tier = 'good'
+      else tier = 'normal'
+
+      if (!goodNow) tier = 'normal'
+      if (mode === 'study' && voice.smoothed <= settings.quietThreshold * 0.72) tier = 'rare'
+      if (mode === 'positive' && voice.smoothed >= settings.activeThreshold * 1.2) tier = 'rare'
 
       fishCountsRef.current = {
         ...fishCountsRef.current,
         [tier]: fishCountsRef.current[tier] + 1,
       }
+
       if (tier === 'rare' && !rareFishNameRef.current) {
         rareFishNameRef.current = pickRareFishName(nextEffective)
       }
 
       setLastTier(tier)
-      const total = summarizeFish(fishCountsRef.current)
-      setDisplayFish(Math.min(24, total))
-
-      windowAccRef.current -= FISH_WINDOW_SECONDS
-      qualityAccRef.current = Math.max(0, qualityAccRef.current - FISH_WINDOW_SECONDS)
-      setProgressSeconds(windowAccRef.current)
+      setDisplayFish(Math.min(24, summarizeFish(fishCountsRef.current)))
+      windowProgressRef.current = Math.max(0, overshoot)
+      setProgressSeconds(windowProgressRef.current)
     }
   }, loopOn)
 
@@ -256,9 +272,7 @@ export function Reading() {
 
   const progressPct = Math.min(100, (progressSeconds / FISH_WINDOW_SECONDS) * 100)
   const fishCounts = fishCountsRef.current
-  const subtitle = lastTier ? qualityText(sessionMode, lastTier) : sessionMode === 'study'
-    ? '自习模式下，每 15 秒按安静质量结算 1 条鱼'
-    : '早读模式下，每 15 秒按朗读质量结算 1 条鱼'
+  const subtitle = qualityText(sessionMode, lastTier, justBroken)
 
   return (
     <>
@@ -272,49 +286,43 @@ export function Reading() {
 
       {errorMessage && <p style={{ color: 'var(--danger)', margin: 0, fontSize: '0.9rem' }}>{errorMessage}</p>}
 
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <AquariumTank fishCount={Math.min(24, displayFish)} />
-        <div style={{ padding: '0.75rem 1rem 1rem' }}>
+      <div className="card reading-stage-card" style={{ padding: 0, overflow: 'hidden' }}>
+        <AquariumTank
+          full
+          normalCount={fishCounts.normal}
+          goodCount={fishCounts.good}
+          rareCount={fishCounts.rare}
+        />
+        <div style={{ padding: '0.8rem 1rem 1rem' }}>
           <VolumeMeter level={meterLevel} activeThreshold={settingsRef.current.activeThreshold} quietThreshold={settingsRef.current.quietThreshold} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', margin: '0.85rem 0 0.35rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', margin: '0.95rem 0 0.35rem' }}>
             <span>本条鱼进度（15 秒）</span>
             <span>{progressSeconds.toFixed(1)} / 15s</span>
           </div>
           <div className="progress-wrap" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100}>
             <div className="progress-bar" style={{ width: `${progressPct}%` }} />
           </div>
-          <p style={{ margin: '0.65rem 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>
+          <p style={{ margin: '0.7rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
             累计时长 {effectiveSeconds.toFixed(1)} 秒 · 已结算 {displayFish} 条鱼
           </p>
-          <p style={{ margin: '0.25rem 0 0', color: 'var(--accent-soft)', fontSize: '0.88rem', fontWeight: 600 }}>
+          <p style={{ margin: '0.25rem 0 0', color: 'var(--accent-soft)', fontSize: '0.92rem', fontWeight: 700 }}>
             普通鱼 {fishCounts.normal} · 优质鱼 {fishCounts.good} · 稀有鱼 {fishCounts.rare}
           </p>
-          <p style={{ margin: '0.25rem 0 0', color: 'var(--muted)', fontSize: '0.85rem' }}>{subtitle}</p>
+          <p style={{ margin: '0.3rem 0 0', color: justBroken ? 'var(--warn)' : 'var(--muted)', fontSize: '0.88rem' }}>{subtitle}</p>
         </div>
       </div>
 
-      <div className="card">
-        <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
-          {sessionMode === 'study'
-            ? '自习养鱼：每 15 秒按安静质量结算 1 条鱼。越安静，鱼越稀有。'
-            : '早读养鱼：每 15 秒按朗读质量结算 1 条鱼。越稳定，鱼越稀有。'}
-        </p>
-      </div>
-
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+      <div className="floating-actions">
         {uiStatus === 'idle' || uiStatus === 'error' ? (
-          <button type="button" onClick={startReading}>{uiStatus === 'error' ? '重试麦克风' : '开始'}</button>
+          <button type="button" onClick={startReading}>{uiStatus === 'error' ? '重试' : '开始'}</button>
         ) : (
           <>
-            <button type="button" className="secondary" onClick={endSession}>结束并查看结果</button>
+            <button type="button" onClick={endSession}>结束</button>
             <button type="button" className="secondary" onClick={resetLocal}>重置</button>
+            <Link to="/"><button type="button" className="secondary">首页</button></Link>
           </>
         )}
       </div>
-
-      <Link to="/">
-        <button type="button" className="secondary">回首页</button>
-      </Link>
     </>
   )
 }

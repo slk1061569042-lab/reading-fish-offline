@@ -369,3 +369,30 @@ button.secondary {
   font-size: 0.88rem;
   line-height: 1.5;
 }
+
+.reading-stage-card {
+  min-height: calc(100dvh - 16rem);
+}
+
+.floating-actions {
+  position: sticky;
+  bottom: max(0.85rem, env(safe-area-inset-bottom));
+  z-index: 10;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.65rem;
+  border-radius: 18px;
+  background: rgba(4, 47, 74, 0.82);
+  border: 1px solid rgba(125, 211, 252, 0.18);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(2, 12, 27, 0.28);
+}
+
+.floating-actions a {
+  text-decoration: none;
+}
+
+.floating-actions button {
+  min-width: 5.25rem;
+}

@@ -12,6 +12,7 @@ export type ResultLocationState = {
   normalFish: number
   goodFish: number
   rareFish: number
+  deadFish: number
   playerName: string
   mode: GameMode
   fishAtStart?: number
@@ -51,6 +52,7 @@ export function Result() {
       normalFish: data.normalFish,
       goodFish: data.goodFish,
       rareFish: data.rareFish,
+      deadFish: data.deadFish,
       playerName: data.playerName,
       mode: data.mode,
       fishAtStart: data.fishAtStart,
@@ -70,8 +72,6 @@ export function Result() {
     )
   }
 
-  const showFish = Math.min(24, Math.max(1, data.fishEarned))
-
   return (
     <>
       <header>
@@ -82,12 +82,12 @@ export function Result() {
       </header>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <AquariumTank fishCount={showFish} />
+        <AquariumTank normalCount={data.normalFish} goodCount={data.goodFish} rareCount={data.rareFish} deadCount={data.deadFish} />
         <div style={{ padding: '1rem' }}>
-          <p style={{ margin: 0, fontSize: '1.1rem' }}><strong>{data.fishEarned}</strong> 条鱼</p>
+          <p style={{ margin: 0, fontSize: '1.1rem' }}><strong>{data.fishEarned}</strong> 条结果</p>
           <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>总时长 {formatDuration(data.effectiveSeconds)}</p>
           <p style={{ margin: '0.35rem 0 0', color: 'var(--accent-soft)', fontSize: '0.9rem', fontWeight: 600 }}>
-            普通鱼 {data.normalFish} · 优质鱼 {data.goodFish} · 稀有鱼 {data.rareFish}
+            普通鱼 {data.normalFish} · 优质鱼 {data.goodFish} · 稀有鱼 {data.rareFish} · 死鱼 {data.deadFish}
           </p>
           {data.rareFishUnlocked && data.rareFishName ? (
             <div style={{ marginTop: '0.75rem' }}>
@@ -100,9 +100,9 @@ export function Result() {
       <div className="card">
         <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
           {data.mode === 'study'
-            ? '自习养鱼按每 15 秒安静质量结算。越安静，鱼越稀有。'
+            ? '自习养鱼按固定 15 秒结算，干扰严重会生成死鱼。'
             : data.mode === 'positive'
-              ? '早读养鱼按每 15 秒朗读质量结算。越稳定，鱼越稀有。'
+              ? '早读养鱼按固定 15 秒结算，朗读质量过差会生成死鱼。'
               : '守护鱼缸仍保留兼容展示。'}
         </p>
       </div>

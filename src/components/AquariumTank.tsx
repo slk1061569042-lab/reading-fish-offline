@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-type FishTier = 'normal' | 'good' | 'rare'
+type FishTier = 'normal' | 'good' | 'rare' | 'dead'
 
 type Fish = {
   x: number
@@ -16,6 +16,21 @@ type Fish = {
 }
 
 function makeFish(i: number, w: number, h: number, tier: FishTier): Fish {
+  if (tier === 'dead') {
+    return {
+      x: Math.random() * (w - 50) + 25,
+      y: Math.random() * (h * 0.18) + h * 0.02,
+      vx: (Math.random() - 0.5) * 0.06,
+      vy: 0,
+      phase: Math.random() * Math.PI * 2,
+      tier,
+      w: 30 + (i % 2) * 3,
+      h: 16 + (i % 2) * 2,
+      hue: 0,
+      glow: 'rgba(255,255,255,0)',
+    }
+  }
+
   if (tier === 'rare') {
     return {
       x: Math.random() * (w - 60) + 30,
@@ -65,25 +80,26 @@ type Props = {
   normalCount?: number
   goodCount?: number
   rareCount?: number
+  deadCount?: number
   className?: string
   full?: boolean
 }
 
-export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount, className, full = false }: Props) {
+export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount, deadCount, className, full = false }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fishRef = useRef<Fish[]>([])
-  const countsRef = useRef({ normal: 0, good: 0, rare: 0 })
+  const countsRef = useRef({ normal: 0, good: 0, rare: 0, dead: 0 })
 
   countsRef.current = {
     normal: Math.max(0, Math.min(24, normalCount ?? fishCount)),
     good: Math.max(0, Math.min(24, goodCount ?? 0)),
     rare: Math.max(0, Math.min(24, rareCount ?? 0)),
+    dead: Math.max(0, Math.min(24, deadCount ?? 0)),
   }
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
@@ -106,18 +122,17 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
     const syncFishPool = (w: number, h: number) => {
       const desired: Fish[] = []
       const counts = countsRef.current
+      for (let i = 0; i < counts.dead; i++) desired.push(makeFish(i, w, h, 'dead'))
       for (let i = 0; i < counts.rare; i++) desired.push(makeFish(i, w, h, 'rare'))
       for (let i = 0; i < counts.good; i++) desired.push(makeFish(i, w, h, 'good'))
       for (let i = 0; i < counts.normal; i++) desired.push(makeFish(i, w, h, 'normal'))
-
       if (!fishRef.current.length || fishRef.current.length !== desired.length) {
         fishRef.current = desired
         return
       }
-
       const current = fishRef.current
       let cursor = 0
-      for (const tier of ['rare', 'good', 'normal'] as FishTier[]) {
+      for (const tier of ['dead', 'rare', 'good', 'normal'] as FishTier[]) {
         const targetCount = counts[tier]
         for (let i = 0; i < targetCount; i++) {
           const f = current[cursor]
@@ -169,10 +184,39 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
       ctx.fillRect(0, h - 14, w, 14)
 
       for (const f of fishRef.current) {
+        if (f.tier === 'dead') {
+          f.x += f.vx * dt
+          f.y = Math.min(h * 0.12, f.y - 0.08 * dt)
+          if (f.x < 16 || f.x > w - 16) f.vx *= -1
+          ctx.save()
+          ctx.translate(f.x, f.y)
+          ctx.rotate(Math.PI / 2)
+          ctx.fillStyle = 'rgba(148, 163, 184, 0.85)'
+          ctx.beginPath()
+          ctx.ellipse(0, 0, f.w * 0.5, f.h * 0.5, 0, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.fillStyle = 'rgba(100, 116, 139, 0.95)'
+          ctx.beginPath()
+          ctx.moveTo(-f.w * 0.45, 0)
+          ctx.lineTo(-f.w * 0.95, -f.h * 0.35)
+          ctx.lineTo(-f.w * 0.95, f.h * 0.35)
+          ctx.closePath()
+          ctx.fill()
+          ctx.strokeStyle = 'rgba(255,255,255,0.8)'
+          ctx.lineWidth = 1.2
+          ctx.beginPath()
+          ctx.moveTo(f.w * 0.12, -f.h * 0.18)
+          ctx.lineTo(f.w * 0.28, -f.h * 0.05)
+          ctx.moveTo(f.w * 0.28, -f.h * 0.18)
+          ctx.lineTo(f.w * 0.12, -f.h * 0.05)
+          ctx.stroke()
+          ctx.restore()
+          continue
+        }
+
         f.phase += dt * (f.tier === 'rare' ? 0.04 : 0.06)
         f.x += f.vx * dt
         f.y += f.vy * dt + Math.sin(f.phase) * (f.tier === 'rare' ? 0.1 : 0.15) * dt
-
         if (f.x < 16 || f.x > w - 16) {
           f.vx *= -1
           f.x = Math.max(16, Math.min(w - 16, f.x))
@@ -186,17 +230,14 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
         ctx.save()
         ctx.translate(f.x, f.y)
         ctx.scale(flip, 1)
-
         if (f.tier !== 'normal') {
           ctx.shadowBlur = f.tier === 'rare' ? 18 : 10
           ctx.shadowColor = f.glow
         }
-
         ctx.fillStyle = `hsl(${f.hue} 85% ${f.tier === 'rare' ? '62%' : f.tier === 'good' ? '60%' : '58%'})`
         ctx.beginPath()
         ctx.ellipse(0, 0, f.w * 0.5, f.h * 0.5, 0, 0, Math.PI * 2)
         ctx.fill()
-
         ctx.fillStyle = `hsl(${f.hue} 78% ${f.tier === 'rare' ? '52%' : f.tier === 'good' ? '47%' : '45%'})`
         ctx.beginPath()
         ctx.moveTo(-f.w * 0.45, 0)
@@ -204,7 +245,6 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
         ctx.lineTo(-f.w * 0.98, f.h * 0.38)
         ctx.closePath()
         ctx.fill()
-
         if (f.tier === 'rare') {
           ctx.fillStyle = 'rgba(255,255,255,0.9)'
           ctx.beginPath()
@@ -214,7 +254,6 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
           ctx.closePath()
           ctx.fill()
         }
-
         ctx.fillStyle = '#fff'
         ctx.beginPath()
         ctx.arc(f.w * 0.2, -f.h * 0.12, f.tier === 'rare' ? 3.6 : 3.2, 0, Math.PI * 2)
@@ -223,7 +262,6 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
         ctx.beginPath()
         ctx.arc(f.w * 0.22, -f.h * 0.1, 1.4, 0, Math.PI * 2)
         ctx.fill()
-
         ctx.restore()
       }
 
@@ -242,12 +280,7 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
       ref={canvasRef}
       className={className}
       aria-hidden
-      style={{
-        width: '100%',
-        height: full ? 'min(62dvh, 560px)' : 'clamp(180px, 48vw, 300px)',
-        display: 'block',
-        borderRadius: 12,
-      }}
+      style={{ width: '100%', height: full ? 'min(62dvh, 560px)' : 'clamp(180px, 48vw, 300px)', display: 'block', borderRadius: 12 }}
     />
   )
 }

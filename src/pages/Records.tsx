@@ -51,8 +51,8 @@ export function Records() {
         <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.1rem', color: 'var(--muted)', fontSize: '0.92rem' }}>
           <li>会话次数：{stats.sessionCount}</li>
           <li>累计时长：{formatDuration(stats.totalEffectiveSeconds)}</li>
-          <li>累计鱼数：{stats.totalFish}</li>
-          <li>普通 / 优质 / 稀有：{stats.totalNormalFish} / {stats.totalGoodFish} / {stats.totalRareFish}</li>
+          <li>累计结果数：{stats.totalFish}</li>
+          <li>普通 / 优质 / 稀有 / 死鱼：{stats.totalNormalFish} / {stats.totalGoodFish} / {stats.totalRareFish} / {stats.totalDeadFish}</li>
           <li>早读 / 守护 / 自习：{stats.positiveSessions} / {stats.reverseSessions} / {stats.studySessions}</li>
         </ul>
       </div>
@@ -96,7 +96,7 @@ export function Records() {
                   </div>
                 </div>
                 <span style={{ textAlign: 'right', fontWeight: 600 }}>
-                  {(r.normalFish ?? r.fishEarned)} / {r.goodFish ?? 0} / {r.rareFish ?? 0} · {formatDuration(r.effectiveSeconds)}
+                  {(r.normalFish ?? r.fishEarned)} / {r.goodFish ?? 0} / {r.rareFish ?? 0} / {r.deadFish ?? 0} · {formatDuration(r.effectiveSeconds)}
                 </span>
               </li>
             ))}

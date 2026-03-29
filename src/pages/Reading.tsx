@@ -16,23 +16,24 @@ import { loadProfile, loadSettings, type GameMode, type GameSettings } from '../
 
 export type ReadingStatus = 'idle' | 'requesting' | 'active' | 'quiet' | 'error'
 
-type FishTier = 'normal' | 'good' | 'rare'
+type FishTier = 'normal' | 'good' | 'rare' | 'dead'
 
 type FishCounts = {
   normal: number
   good: number
   rare: number
+  dead: number
 }
 
 type WindowStats = {
   activeSeconds: number
   quietSeconds: number
-  badStreakSeconds: number
+  badSeconds: number
+  worstBadStreak: number
+  currentBadStreak: number
 }
 
 const FISH_WINDOW_SECONDS = 15
-const READING_BREAK_RESET_SECONDS = 1.8
-const STUDY_NOISE_RESET_SECONDS = 0.8
 const RARE_FISH_NAMES = ['晨光蝶尾', '静海流金', '银月纱鳍', '晚霞星鳞']
 
 function statusLabel(s: ReadingStatus): string {
@@ -60,36 +61,36 @@ function pickRareFishName(seed: number): string {
 }
 
 function summarizeFish(counts: FishCounts) {
-  return counts.normal + counts.good + counts.rare
+  return counts.normal + counts.good + counts.rare + counts.dead
 }
 
 function classifyFish(mode: GameMode, stats: WindowStats): FishTier {
   if (mode === 'study') {
+    if (stats.badSeconds >= 5 || stats.worstBadStreak >= 2.2) return 'dead'
     if (stats.quietSeconds >= 14) return 'rare'
-    if (stats.quietSeconds >= 10) return 'good'
+    if (stats.quietSeconds >= 10.5) return 'good'
     return 'normal'
   }
 
+  if (stats.badSeconds >= 6 || stats.worstBadStreak >= 3.2) return 'dead'
   if (stats.activeSeconds >= 13) return 'rare'
-  if (stats.activeSeconds >= 9) return 'good'
+  if (stats.activeSeconds >= 9.5) return 'good'
   return 'normal'
 }
 
-function qualityText(mode: GameMode, tier: FishTier | null, broken: boolean) {
-  if (broken) {
-    return mode === 'study'
-      ? '连续噪音过久，本条鱼已失败，进度重新开始'
-      : '连续掉线过久，本条鱼已失败，进度重新开始'
-  }
+function qualityText(mode: GameMode, tier: FishTier | null) {
   if (!tier) {
     return mode === 'study'
-      ? '自习养鱼：看 15 秒内安静占比，允许短暂干扰，但连续噪音过久会失败'
-      : '早读养鱼：看 15 秒内朗读占比，允许短暂停顿，但连续掉线过久会失败'
+      ? '自习养鱼：15 秒固定结算，按安静质量生成普通 / 优质 / 稀有 / 死鱼'
+      : '早读养鱼：15 秒固定结算，按朗读质量生成普通 / 优质 / 稀有 / 死鱼'
+  }
+  if (tier === 'dead') {
+    return mode === 'study' ? '这一条干扰严重，生成了死鱼' : '这一条朗读质量太差，生成了死鱼'
   }
   if (mode === 'study') {
     if (tier === 'rare') return '这一条很安静，结算稀有鱼'
     if (tier === 'good') return '这一条比较稳，结算优质鱼'
-    return '这一条干扰偏多，结算普通鱼'
+    return '这一条有些干扰，结算普通鱼'
   }
   if (tier === 'rare') return '这一条朗读很稳，结算稀有鱼'
   if (tier === 'good') return '这一条朗读不错，结算优质鱼'
@@ -104,6 +105,7 @@ export type ReadingResultPayload = {
   normalFish: number
   goodFish: number
   rareFish: number
+  deadFish: number
   playerName: string
   mode: GameMode
   fishAtStart?: number
@@ -126,8 +128,8 @@ export function Reading() {
   const effectiveRef = useRef(0)
   const meterAccRef = useRef(0)
   const progressRef = useRef(0)
-  const statsRef = useRef<WindowStats>({ activeSeconds: 0, quietSeconds: 0, badStreakSeconds: 0 })
-  const fishCountsRef = useRef<FishCounts>({ normal: 0, good: 0, rare: 0 })
+  const statsRef = useRef<WindowStats>({ activeSeconds: 0, quietSeconds: 0, badSeconds: 0, worstBadStreak: 0, currentBadStreak: 0 })
+  const fishCountsRef = useRef<FishCounts>({ normal: 0, good: 0, rare: 0, dead: 0 })
   const rareFishNameRef = useRef<string | null>(null)
 
   const [sessionMode, setSessionMode] = useState<GameMode>('positive')
@@ -138,7 +140,6 @@ export function Reading() {
   const [meterLevel, setMeterLevel] = useState(0)
   const [progressSeconds, setProgressSeconds] = useState(0)
   const [lastTier, setLastTier] = useState<FishTier | null>(null)
-  const [justBroken, setJustBroken] = useState(false)
 
   const cleanupMic = useCallback(() => {
     stopMicPipeline(pipelineRef.current)
@@ -153,20 +154,19 @@ export function Reading() {
     effectiveRef.current = 0
     meterAccRef.current = 0
     progressRef.current = 0
-    statsRef.current = { activeSeconds: 0, quietSeconds: 0, badStreakSeconds: 0 }
-    fishCountsRef.current = { normal: 0, good: 0, rare: 0 }
+    statsRef.current = { activeSeconds: 0, quietSeconds: 0, badSeconds: 0, worstBadStreak: 0, currentBadStreak: 0 }
+    fishCountsRef.current = { normal: 0, good: 0, rare: 0, dead: 0 }
     rareFishNameRef.current = null
     setEffectiveSeconds(0)
     setDisplayFish(0)
     setMeterLevel(0)
     setProgressSeconds(0)
     setLastTier(null)
-    setJustBroken(false)
   }
 
   const resetCurrentFish = () => {
     progressRef.current = 0
-    statsRef.current = { activeSeconds: 0, quietSeconds: 0, badStreakSeconds: 0 }
+    statsRef.current = { activeSeconds: 0, quietSeconds: 0, badSeconds: 0, worstBadStreak: 0, currentBadStreak: 0 }
     setProgressSeconds(0)
   }
 
@@ -222,36 +222,22 @@ export function Reading() {
     const goodNow = mode === 'study' ? voice.smoothed <= settings.quietThreshold : voice.isActive
 
     setUiStatus(goodNow ? 'active' : 'quiet')
-    setJustBroken(false)
 
     effectiveRef.current += dt
     setEffectiveSeconds(effectiveRef.current)
 
+    progressRef.current = Math.min(FISH_WINDOW_SECONDS, progressRef.current + dt)
+
     if (goodNow) {
-      progressRef.current = Math.min(FISH_WINDOW_SECONDS, progressRef.current + dt)
-      statsRef.current.badStreakSeconds = 0
-      if (mode === 'study') {
-        statsRef.current.quietSeconds += dt
-      } else {
-        statsRef.current.activeSeconds += dt
-      }
+      statsRef.current.currentBadStreak = 0
+      if (mode === 'study') statsRef.current.quietSeconds += dt
+      else statsRef.current.activeSeconds += dt
     } else {
-      statsRef.current.badStreakSeconds += dt
-      if (mode === 'study') {
-        statsRef.current.activeSeconds += dt
-      } else {
-        statsRef.current.quietSeconds += dt
-      }
-    }
-
-    const shouldBreak = mode === 'study'
-      ? statsRef.current.badStreakSeconds >= STUDY_NOISE_RESET_SECONDS
-      : statsRef.current.badStreakSeconds >= READING_BREAK_RESET_SECONDS
-
-    if (shouldBreak) {
-      if (progressRef.current > 0) setJustBroken(true)
-      resetCurrentFish()
-      return
+      statsRef.current.badSeconds += dt
+      statsRef.current.currentBadStreak += dt
+      statsRef.current.worstBadStreak = Math.max(statsRef.current.worstBadStreak, statsRef.current.currentBadStreak)
+      if (mode === 'study') statsRef.current.activeSeconds += dt
+      else statsRef.current.quietSeconds += dt
     }
 
     setProgressSeconds(progressRef.current)
@@ -262,11 +248,9 @@ export function Reading() {
         ...fishCountsRef.current,
         [tier]: fishCountsRef.current[tier] + 1,
       }
-
       if (tier === 'rare' && !rareFishNameRef.current) {
         rareFishNameRef.current = pickRareFishName(effectiveRef.current)
       }
-
       setLastTier(tier)
       setDisplayFish(Math.min(24, summarizeFish(fishCountsRef.current)))
       resetCurrentFish()
@@ -286,6 +270,7 @@ export function Reading() {
       normalFish: counts.normal,
       goodFish: counts.good,
       rareFish: counts.rare,
+      deadFish: counts.dead,
       playerName: sessionPlayerRef.current,
       mode: sessionModeRef.current,
       fishAtEnd: fishEarned,
@@ -311,7 +296,7 @@ export function Reading() {
 
   const progressPct = Math.min(100, (progressSeconds / FISH_WINDOW_SECONDS) * 100)
   const fishCounts = fishCountsRef.current
-  const subtitle = qualityText(sessionMode, lastTier, justBroken)
+  const subtitle = qualityText(sessionMode, lastTier)
 
   return (
     <>
@@ -331,23 +316,24 @@ export function Reading() {
           normalCount={fishCounts.normal}
           goodCount={fishCounts.good}
           rareCount={fishCounts.rare}
+          deadCount={fishCounts.dead}
         />
         <div style={{ padding: '0.8rem 1rem 1rem' }}>
           <VolumeMeter level={meterLevel} activeThreshold={settingsRef.current.activeThreshold} quietThreshold={settingsRef.current.quietThreshold} />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', margin: '0.95rem 0 0.35rem' }}>
-            <span>本条鱼进度（15 秒有效进度）</span>
+            <span>本条鱼进度（固定 15 秒）</span>
             <span>{progressSeconds.toFixed(1)} / 15s</span>
           </div>
           <div className="progress-wrap" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100}>
             <div className="progress-bar" style={{ width: `${progressPct}%` }} />
           </div>
           <p style={{ margin: '0.7rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
-            累计时长 {effectiveSeconds.toFixed(1)} 秒 · 已结算 {displayFish} 条鱼
+            累计时长 {effectiveSeconds.toFixed(1)} 秒 · 已结算 {displayFish} 条鱼/死鱼
           </p>
           <p style={{ margin: '0.25rem 0 0', color: 'var(--accent-soft)', fontSize: '0.92rem', fontWeight: 700 }}>
-            普通鱼 {fishCounts.normal} · 优质鱼 {fishCounts.good} · 稀有鱼 {fishCounts.rare}
+            普通鱼 {fishCounts.normal} · 优质鱼 {fishCounts.good} · 稀有鱼 {fishCounts.rare} · 死鱼 {fishCounts.dead}
           </p>
-          <p style={{ margin: '0.3rem 0 0', color: justBroken ? 'var(--warn)' : 'var(--muted)', fontSize: '0.88rem' }}>{subtitle}</p>
+          <p style={{ margin: '0.3rem 0 0', color: lastTier === 'dead' ? 'var(--danger)' : 'var(--muted)', fontSize: '0.88rem' }}>{subtitle}</p>
         </div>
       </div>
 

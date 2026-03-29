@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AquariumTank } from '../components/AquariumTank'
 import { RareFishCard } from '../components/RareFishCard'
-import { appendRecord, type FishResult, type GameMode } from '../modules/storage'
+import { appendRecord, type BattleReport, type FishResult, type GameMode } from '../modules/storage'
 
 export type ResultLocationState = {
   startedAt: string
@@ -12,8 +12,11 @@ export type ResultLocationState = {
   normalFish: number
   goodFish: number
   rareFish: number
+  superRareFish: number
   deadFish: number
+  sharkCount: number
   fishResults: FishResult[]
+  battleReport: BattleReport
   playerName: string
   mode: GameMode
   fishAtStart?: number
@@ -40,7 +43,7 @@ function tierLabel(tier: FishResult['tier']) {
   switch (tier) {
     case 'rare': return '稀有鱼'
     case 'good': return '优质鱼'
-    case 'dead': return '死鱼 / 怨念鲨鱼'
+    case 'dead': return '死鱼'
     default: return '普通鱼'
   }
 }
@@ -62,8 +65,11 @@ export function Result() {
       normalFish: data.normalFish,
       goodFish: data.goodFish,
       rareFish: data.rareFish,
+      superRareFish: data.superRareFish,
       deadFish: data.deadFish,
+      sharkCount: data.sharkCount,
       fishResults: data.fishResults,
+      battleReport: data.battleReport,
       playerName: data.playerName,
       mode: data.mode,
       fishAtStart: data.fishAtStart,
@@ -85,11 +91,13 @@ export function Result() {
       </header>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <AquariumTank normalCount={data.normalFish} goodCount={data.goodFish} rareCount={data.rareFish} deadCount={data.deadFish} />
+        <AquariumTank normalCount={data.normalFish} goodCount={data.goodFish} rareCount={data.rareFish} superRareCount={data.superRareFish} deadCount={data.deadFish} sharkCount={data.sharkCount} />
         <div style={{ padding: '1rem' }}>
-          <p style={{ margin: 0, fontSize: '1.1rem' }}><strong>{data.fishEarned}</strong> 条结果</p>
+          <p style={{ margin: 0, fontSize: '1.1rem' }}><strong>{data.fishEarned}</strong> 条最终存活结果</p>
           <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>总时长 {formatDuration(data.effectiveSeconds)}</p>
-          <p style={{ margin: '0.35rem 0 0', color: 'var(--accent-soft)', fontSize: '0.9rem', fontWeight: 600 }}>普通鱼 {data.normalFish} · 优质鱼 {data.goodFish} · 稀有鱼 {data.rareFish} · 死鱼 {data.deadFish}</p>
+          <p style={{ margin: '0.35rem 0 0', color: 'var(--accent-soft)', fontSize: '0.9rem', fontWeight: 600 }}>
+            普通鱼 {data.normalFish} · 优质鱼 {data.goodFish} · 稀有鱼 {data.rareFish} · 超级稀有鱼 {data.superRareFish} · 死鱼 {data.deadFish} · 怨念鲨鱼 {data.sharkCount}
+          </p>
           {data.rareFishUnlocked && data.rareFishName ? <div style={{ marginTop: '0.75rem' }}><RareFishCard name={data.rareFishName} subtitle="本轮首条稀有鱼" /></div> : null}
         </div>
       </div>
@@ -101,7 +109,7 @@ export function Result() {
             <div key={idx} style={{ border: '1px solid rgba(125,211,252,0.14)', borderRadius: 12, padding: '0.65rem 0.75rem', background: 'rgba(3,25,39,0.18)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', alignItems: 'center' }}>
                 <strong>第 {idx + 1} 条：{tierLabel(result.tier)}</strong>
-                {result.rareFishName ? <span style={{ color: 'var(--sand)', fontSize: '0.82rem)' }}>{result.rareFishName}</span> : null}
+                {result.rareFishName ? <span style={{ color: 'var(--sand)', fontSize: '0.82rem' }}>{result.rareFishName}</span> : null}
               </div>
               <div className="progress-wrap progress-segments" style={{ marginTop: '0.45rem' }}>
                 {result.segments.map((seg, i) => <span key={i} className={`progress-segment is-filled is-${seg}`} />)}
@@ -112,9 +120,18 @@ export function Result() {
       </div>
 
       <div className="card">
-        <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
-          {data.mode === 'study' ? '自习养鱼按固定 15 秒结算，干扰严重会生成死鱼并召出怨念鲨鱼。' : data.mode === 'positive' ? '早读养鱼按固定 15 秒结算，朗读质量过差会生成死鱼并召出怨念鲨鱼。' : '守护鱼缸仍保留兼容展示。'}
-        </p>
+        <strong>战报</strong>
+        <ul style={{ margin: '0.65rem 0 0', paddingLeft: '1.1rem', color: 'var(--muted)', fontSize: '0.9rem' }}>
+          <li>死鱼合成：{data.battleReport.deadFishCombined} 条 → 怨念鲨鱼 {data.battleReport.sharksSummoned} 条</li>
+          <li>稀有鱼合体：{data.battleReport.rareFishCombined} 条 → 超级稀有鱼 {data.battleReport.superRareSummoned} 条</li>
+          <li>鲨鱼击杀：{data.battleReport.sharksDefeated} 条</li>
+          <li>被吃掉：普通鱼 {data.battleReport.fishEaten.normal} · 优质鱼 {data.battleReport.fishEaten.good} · 稀有鱼 {data.battleReport.fishEaten.rare}</li>
+        </ul>
+        <div style={{ display: 'grid', gap: '0.4rem', marginTop: '0.8rem' }}>
+          {data.battleReport.log.map((line, idx) => (
+            <div key={idx} style={{ fontSize: '0.86rem', color: 'var(--muted)', padding: '0.45rem 0.55rem', borderRadius: 10, background: 'rgba(2, 132, 199, 0.08)' }}>{line}</div>
+          ))}
+        </div>
       </div>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>

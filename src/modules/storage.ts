@@ -2,12 +2,34 @@
 
 export type GameMode = 'positive' | 'reverse' | 'study'
 export type SegmentState = 'good' | 'warn' | 'bad'
-export type FishTier = 'normal' | 'good' | 'rare' | 'dead'
+export type FishTier = 'normal' | 'good' | 'rare' | 'superRare' | 'dead'
 
 export type FishResult = {
-  tier: FishTier
+  tier: Exclude<FishTier, 'superRare'>
   rareFishName?: string
   segments: SegmentState[]
+}
+
+export type BattleReport = {
+  deadFishCombined: number
+  rareFishCombined: number
+  sharksSummoned: number
+  superRareSummoned: number
+  sharksDefeated: number
+  fishEaten: {
+    normal: number
+    good: number
+    rare: number
+  }
+  finalCounts: {
+    normal: number
+    good: number
+    rare: number
+    superRare: number
+    dead: number
+    shark: number
+  }
+  log: string[]
 }
 
 export type UserProfile = {
@@ -33,8 +55,11 @@ export type ReadingRecord = {
   normalFish?: number
   goodFish?: number
   rareFish?: number
+  superRareFish?: number
   deadFish?: number
+  sharkCount?: number
   fishResults?: FishResult[]
+  battleReport?: BattleReport
   playerName?: string
   mode?: GameMode
   fishAtStart?: number
@@ -76,13 +101,19 @@ function isSegmentState(x: unknown): x is SegmentState {
 }
 
 function isFishTier(x: unknown): x is FishTier {
-  return x === 'normal' || x === 'good' || x === 'rare' || x === 'dead'
+  return x === 'normal' || x === 'good' || x === 'rare' || x === 'superRare' || x === 'dead'
 }
 
 function isFishResult(x: unknown): x is FishResult {
   if (!x || typeof x !== 'object') return false
   const o = x as Record<string, unknown>
-  return isFishTier(o.tier) && Array.isArray(o.segments) && o.segments.every(isSegmentState)
+  return isFishTier(o.tier) && o.tier !== 'superRare' && Array.isArray(o.segments) && o.segments.every(isSegmentState)
+}
+
+function isBattleReport(x: unknown): x is BattleReport {
+  if (!x || typeof x !== 'object') return false
+  const o = x as Record<string, unknown>
+  return Array.isArray(o.log)
 }
 
 function isRecord(x: unknown): x is ReadingRecord {
@@ -130,6 +161,7 @@ function normalizeRecord(r: ReadingRecord): ReadingRecord {
   return {
     ...r,
     fishResults: Array.isArray(r.fishResults) ? r.fishResults.filter(isFishResult) : undefined,
+    battleReport: isBattleReport(r.battleReport) ? r.battleReport : undefined,
   }
 }
 
@@ -254,7 +286,10 @@ export function recordStats(records: ReadingRecord[]) {
   const totalNormalFish = records.reduce((acc, r) => acc + (r.normalFish ?? r.fishEarned), 0)
   const totalGoodFish = records.reduce((acc, r) => acc + (r.goodFish ?? 0), 0)
   const totalRareFish = records.reduce((acc, r) => acc + (r.rareFish ?? 0), 0)
+  const totalSuperRareFish = records.reduce((acc, r) => acc + (r.superRareFish ?? r.battleReport?.finalCounts.superRare ?? 0), 0)
   const totalDeadFish = records.reduce((acc, r) => acc + (r.deadFish ?? 0), 0)
+  const totalSharks = records.reduce((acc, r) => acc + (r.sharkCount ?? r.battleReport?.finalCounts.shark ?? 0), 0)
+  const totalSharksDefeated = records.reduce((acc, r) => acc + (r.battleReport?.sharksDefeated ?? 0), 0)
   return {
     sessionCount: records.length,
     totalFish,
@@ -266,7 +301,10 @@ export function recordStats(records: ReadingRecord[]) {
     totalNormalFish,
     totalGoodFish,
     totalRareFish,
+    totalSuperRareFish,
     totalDeadFish,
+    totalSharks,
+    totalSharksDefeated,
   }
 }
 

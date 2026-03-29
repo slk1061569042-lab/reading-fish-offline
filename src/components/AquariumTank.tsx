@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 
-type FishTier = 'normal' | 'good' | 'rare' | 'dead'
+type FishTier = 'normal' | 'good' | 'rare' | 'superRare' | 'dead'
 
 type Fish = {
   x: number
@@ -23,6 +23,7 @@ type Shark = {
   vx: number
   phase: number
   size: number
+  hp: number
 }
 
 function makeFish(i: number, w: number, h: number, tier: FishTier): Fish {
@@ -42,6 +43,22 @@ function makeFish(i: number, w: number, h: number, tier: FishTier): Fish {
     }
   }
 
+  if (tier === 'superRare') {
+    return {
+      x: Math.random() * (w - 80) + 40,
+      y: Math.random() * (h * 0.45) + h * 0.12,
+      vx: (Math.random() * 0.65 + 0.46) * (Math.random() < 0.5 ? -1 : 1),
+      vy: (Math.random() - 0.5) * 0.22,
+      phase: Math.random() * Math.PI * 2,
+      tier,
+      variant: i % 3,
+      w: 58,
+      h: 28,
+      hue: 284,
+      glow: 'rgba(217,70,239,0.6)',
+    }
+  }
+
   if (tier === 'rare') {
     const variant = i % 4
     const rarePalettes = [
@@ -54,7 +71,7 @@ function makeFish(i: number, w: number, h: number, tier: FishTier): Fish {
     return {
       x: Math.random() * (w - 60) + 30,
       y: Math.random() * (h * 0.5) + h * 0.12,
-      vx: (Math.random() * 0.32 + 0.12) * (Math.random() < 0.5 ? -1 : 1),
+      vx: (Math.random() * 0.45 + 0.28) * (Math.random() < 0.5 ? -1 : 1),
       vy: (Math.random() - 0.5) * 0.18,
       phase: Math.random() * Math.PI * 2,
       tier,
@@ -70,7 +87,7 @@ function makeFish(i: number, w: number, h: number, tier: FishTier): Fish {
     return {
       x: Math.random() * (w - 50) + 25,
       y: Math.random() * (h * 0.54) + h * 0.12,
-      vx: (Math.random() * 0.4 + 0.16) * (Math.random() < 0.5 ? -1 : 1),
+      vx: (Math.random() * 0.46 + 0.22) * (Math.random() < 0.5 ? -1 : 1),
       vy: (Math.random() - 0.5) * 0.22,
       phase: Math.random() * Math.PI * 2,
       tier,
@@ -85,7 +102,7 @@ function makeFish(i: number, w: number, h: number, tier: FishTier): Fish {
   return {
     x: Math.random() * (w - 40) + 20,
     y: Math.random() * (h * 0.58) + h * 0.14,
-    vx: (Math.random() * 0.45 + 0.18) * (Math.random() < 0.5 ? -1 : 1),
+    vx: (Math.random() * 0.35 + 0.14) * (Math.random() < 0.5 ? -1 : 1),
     vy: (Math.random() - 0.5) * 0.24,
     phase: Math.random() * Math.PI * 2,
     tier,
@@ -101,9 +118,10 @@ function makeShark(i: number, w: number, h: number): Shark {
   return {
     x: Math.random() * (w - 120) + 60,
     y: Math.random() * (h * 0.46) + h * 0.18,
-    vx: (Math.random() < 0.5 ? -1 : 1) * (0.5 + Math.random() * 0.18),
+    vx: (Math.random() < 0.5 ? -1 : 1) * (0.55 + Math.random() * 0.18),
     phase: Math.random() * Math.PI * 2 + i,
     size: 66 + (i % 2) * 10,
+    hp: 8,
   }
 }
 
@@ -112,22 +130,26 @@ type Props = {
   normalCount?: number
   goodCount?: number
   rareCount?: number
+  superRareCount?: number
   deadCount?: number
+  sharkCount?: number
   className?: string
   full?: boolean
 }
 
-export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount, deadCount, className, full = false }: Props) {
+export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount, superRareCount, deadCount, sharkCount, className, full = false }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const fishRef = useRef<Fish[]>([])
   const sharksRef = useRef<Shark[]>([])
-  const countsRef = useRef({ normal: 0, good: 0, rare: 0, dead: 0 })
+  const countsRef = useRef({ normal: 0, good: 0, rare: 0, superRare: 0, dead: 0, shark: 0 })
 
   countsRef.current = {
-    normal: Math.max(0, Math.min(24, normalCount ?? fishCount)),
-    good: Math.max(0, Math.min(24, goodCount ?? 0)),
-    rare: Math.max(0, Math.min(24, rareCount ?? 0)),
-    dead: Math.max(0, Math.min(24, deadCount ?? 0)),
+    normal: Math.max(0, Math.min(48, normalCount ?? fishCount)),
+    good: Math.max(0, Math.min(48, goodCount ?? 0)),
+    rare: Math.max(0, Math.min(48, rareCount ?? 0)),
+    superRare: Math.max(0, Math.min(12, superRareCount ?? 0)),
+    dead: Math.max(0, Math.min(48, deadCount ?? 0)),
+    shark: Math.max(0, Math.min(12, sharkCount ?? 0)),
   }
 
   useEffect(() => {
@@ -156,7 +178,7 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
       const current = fishRef.current
       const desiredCounts = countsRef.current
       const next: Fish[] = []
-      const tierOrder: FishTier[] = ['dead', 'rare', 'good', 'normal']
+      const tierOrder: FishTier[] = ['dead', 'superRare', 'rare', 'good', 'normal']
       for (const tier of tierOrder) {
         const existing = current.filter((f) => f.tier === tier)
         const target = desiredCounts[tier]
@@ -165,7 +187,7 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
       fishRef.current = next
 
       const sharkCurrent = sharksRef.current
-      const sharkTarget = desiredCounts.dead
+      const sharkTarget = desiredCounts.shark
       const sharkNext: Shark[] = []
       for (let i = 0; i < sharkTarget; i++) sharkNext.push(sharkCurrent[i] ?? makeShark(i, w, h))
       sharksRef.current = sharkNext
@@ -252,13 +274,13 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
 
       for (const shark of sharks) {
         shark.phase += dt * 0.045
-        const prey = fishList.find((f) => (f.tier === 'normal' || f.tier === 'good') && (!f.hiddenUntil || f.hiddenUntil < now))
+        const prey = fishList.find((f) => (f.tier === 'normal' || f.tier === 'good' || f.tier === 'rare' || f.tier === 'superRare') && (!f.hiddenUntil || f.hiddenUntil < now))
         if (prey) {
           shark.vx += Math.sign(prey.x - shark.x) * 0.012
           shark.vx = Math.max(-1.2, Math.min(1.2, shark.vx))
           shark.y += Math.sign(prey.y - shark.y) * 0.18 * dt
           if (Math.abs(shark.x - prey.x) < shark.size * 0.3 && Math.abs(shark.y - prey.y) < shark.size * 0.18) {
-            prey.hiddenUntil = now + 1800
+            prey.hiddenUntil = now + 1200
             prey.x = Math.random() * (w - 40) + 20
             prey.y = Math.random() * (h * 0.58) + h * 0.14
           }
@@ -311,12 +333,15 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
           continue
         }
 
-        const nearbyShark = sharks.find((s) => Math.abs(s.x - f.x) < 80 && Math.abs(s.y - f.y) < 40)
-        if (nearbyShark) f.vx += Math.sign(f.x - nearbyShark.x) * 0.04
+        const nearbyShark = sharks.find((s) => Math.abs(s.x - f.x) < 90 && Math.abs(s.y - f.y) < 48)
+        if (nearbyShark) {
+          const boost = f.tier === 'superRare' ? 0.08 : f.tier === 'rare' ? 0.05 : f.tier === 'good' ? 0.035 : 0.025
+          f.vx += Math.sign(f.x - nearbyShark.x) * boost
+        }
 
-        f.phase += dt * (f.tier === 'rare' ? 0.04 : 0.06)
+        f.phase += dt * (f.tier === 'superRare' ? 0.055 : f.tier === 'rare' ? 0.04 : 0.06)
         f.x += f.vx * dt
-        f.y += f.vy * dt + Math.sin(f.phase) * (f.tier === 'rare' ? 0.1 : 0.15) * dt
+        f.y += f.vy * dt + Math.sin(f.phase) * (f.tier === 'superRare' ? 0.18 : f.tier === 'rare' ? 0.1 : 0.15) * dt
         if (f.x < 16 || f.x > w - 16) {
           f.vx *= -1
           f.x = Math.max(16, Math.min(w - 16, f.x))
@@ -331,14 +356,14 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
         ctx.translate(f.x, f.y)
         ctx.scale(flip, 1)
         if (f.tier !== 'normal') {
-          ctx.shadowBlur = f.tier === 'rare' ? 18 : 10
+          ctx.shadowBlur = f.tier === 'superRare' ? 22 : f.tier === 'rare' ? 18 : 10
           ctx.shadowColor = f.glow
         }
-        ctx.fillStyle = `hsl(${f.hue} 85% ${f.tier === 'rare' ? '62%' : f.tier === 'good' ? '60%' : '58%'})`
+        ctx.fillStyle = `hsl(${f.hue} 85% ${f.tier === 'superRare' ? '68%' : f.tier === 'rare' ? '62%' : f.tier === 'good' ? '60%' : '58%'})`
         ctx.beginPath()
         ctx.ellipse(0, 0, f.w * 0.5, f.h * 0.5, 0, 0, Math.PI * 2)
         ctx.fill()
-        ctx.fillStyle = `hsl(${f.hue} 78% ${f.tier === 'rare' ? '52%' : f.tier === 'good' ? '47%' : '45%'})`
+        ctx.fillStyle = `hsl(${f.hue} 78% ${f.tier === 'superRare' ? '54%' : f.tier === 'rare' ? '52%' : f.tier === 'good' ? '47%' : '45%'})`
         ctx.beginPath()
         ctx.moveTo(-f.w * 0.45, 0)
         ctx.lineTo(-f.w * 0.98, -f.h * 0.38)
@@ -346,9 +371,22 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
         ctx.closePath()
         ctx.fill()
         if (f.tier === 'rare') drawRareAccent(f)
+        if (f.tier === 'superRare') {
+          ctx.strokeStyle = 'rgba(255,255,255,0.9)'
+          ctx.lineWidth = 2.4
+          ctx.beginPath()
+          ctx.moveTo(-f.w * 0.05, -f.h * 0.72)
+          ctx.lineTo(f.w * 0.08, -f.h * 1.02)
+          ctx.lineTo(f.w * 0.2, -f.h * 0.72)
+          ctx.stroke()
+          ctx.fillStyle = 'rgba(255,255,255,0.85)'
+          ctx.beginPath()
+          ctx.arc(f.w * 0.08, -f.h * 0.62, 3.5, 0, Math.PI * 2)
+          ctx.fill()
+        }
         ctx.fillStyle = '#fff'
         ctx.beginPath()
-        ctx.arc(f.w * 0.2, -f.h * 0.12, f.tier === 'rare' ? 3.6 : 3.2, 0, Math.PI * 2)
+        ctx.arc(f.w * 0.2, -f.h * 0.12, f.tier === 'superRare' ? 4 : f.tier === 'rare' ? 3.6 : 3.2, 0, Math.PI * 2)
         ctx.fill()
         ctx.fillStyle = '#0c4a6e'
         ctx.beginPath()
@@ -395,6 +433,10 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
         ctx.beginPath()
         ctx.arc(shark.size * 0.19, -shark.size * 0.05, 1.6, 0, Math.PI * 2)
         ctx.fill()
+        ctx.fillStyle = 'rgba(255,255,255,0.8)'
+        ctx.fillRect(-shark.size * 0.25, shark.size * 0.28, shark.size * 0.5, 4)
+        ctx.fillStyle = shark.hp > 4 ? 'rgba(34,197,94,0.95)' : shark.hp > 2 ? 'rgba(250,204,21,0.95)' : 'rgba(239,68,68,0.95)'
+        ctx.fillRect(-shark.size * 0.25, shark.size * 0.28, shark.size * 0.5 * (shark.hp / 8), 4)
         ctx.restore()
       }
 

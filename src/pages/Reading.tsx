@@ -12,7 +12,7 @@ import {
   type MicPipeline,
   type VoiceStateMachine,
 } from '../modules/audioDetector'
-import { loadProfile, loadSettings, type FishResult, type FishTier, type GameMode, type GameSettings, type SegmentState } from '../modules/storage'
+import { loadProfile, loadSettings, type BattleReport, type FishResult, type FishTier, type GameMode, type GameSettings, type SegmentState } from '../modules/storage'
 
 export type ReadingStatus = 'idle' | 'requesting' | 'active' | 'quiet' | 'error'
 
@@ -20,7 +20,9 @@ type FishCounts = {
   normal: number
   good: number
   rare: number
+  superRare: number
   dead: number
+  shark: number
 }
 
 type WindowStats = {
@@ -59,10 +61,10 @@ function pickRareFishName(seed: number): string {
 }
 
 function summarizeFish(counts: FishCounts) {
-  return counts.normal + counts.good + counts.rare + counts.dead
+  return counts.normal + counts.good + counts.rare + counts.superRare + counts.dead
 }
 
-function classifyFish(mode: GameMode, stats: WindowStats): FishTier {
+function classifyFish(mode: GameMode, stats: WindowStats): Exclude<FishTier, 'superRare'> {
   if (mode === 'study') {
     if (stats.badSeconds >= 5 || stats.worstBadStreak >= 2.2) return 'dead'
     if (stats.quietSeconds >= 14) return 'rare'
@@ -76,14 +78,14 @@ function classifyFish(mode: GameMode, stats: WindowStats): FishTier {
   return 'normal'
 }
 
-function qualityText(mode: GameMode, tier: FishTier | null) {
+function qualityText(mode: GameMode, tier: Exclude<FishTier, 'superRare'> | null) {
   if (!tier) {
     return mode === 'study'
       ? '自习养鱼：15 秒固定结算，按安静质量生成普通 / 优质 / 稀有 / 死鱼'
       : '早读养鱼：15 秒固定结算，按朗读质量生成普通 / 优质 / 稀有 / 死鱼'
   }
   if (tier === 'dead') {
-    return mode === 'study' ? '这一条干扰严重，生成了死鱼和怨念鲨鱼' : '这一条朗读质量太差，生成了死鱼和怨念鲨鱼'
+    return mode === 'study' ? '这一条干扰严重，生成了死鱼' : '这一条朗读质量太差，生成了死鱼'
   }
   if (mode === 'study') {
     if (tier === 'rare') return '这一条很安静，结算稀有鱼'
@@ -95,6 +97,92 @@ function qualityText(mode: GameMode, tier: FishTier | null) {
   return '这一条朗读一般，结算普通鱼'
 }
 
+function buildBattle(counts: FishCounts): BattleReport {
+  const log: string[] = []
+  const fishEaten = { normal: 0, good: 0, rare: 0 }
+  const sharksSummoned = Math.floor(counts.dead / 10)
+  const deadFishCombined = sharksSummoned * 10
+  let deadLeft = counts.dead - deadFishCombined
+  let normal = counts.normal
+  let good = counts.good
+  let rare = counts.rare
+  let superRare = Math.floor(rare / 10)
+  const rareFishCombined = superRare * 10
+  rare -= rareFishCombined
+  const superRareSummoned = superRare
+  let shark = sharksSummoned
+  let sharksDefeated = 0
+
+  if (sharksSummoned > 0) log.push(`10 条死鱼合成规则触发，召出 ${sharksSummoned} 条怨念鲨鱼`)
+  if (superRareSummoned > 0) log.push(`10 条稀有鱼合体，生成 ${superRareSummoned} 条超级稀有鱼`)
+
+  for (let i = 0; i < shark; i++) {
+    let hp = 8
+    const superAttacks = Math.min(superRare, 2)
+    if (superAttacks > 0) {
+      hp -= superAttacks * 4
+      log.push(`超级稀有鱼集火怨念鲨鱼 #${i + 1}，造成 ${superAttacks * 4} 点伤害`)
+    }
+    if (hp > 0 && rare > 0) {
+      const rareAttacks = Math.min(rare, 2)
+      hp -= rareAttacks * 2
+      log.push(`稀有鱼反击怨念鲨鱼 #${i + 1}，造成 ${rareAttacks * 2} 点伤害`)
+    }
+    if (hp <= 0) {
+      sharksDefeated += 1
+      log.push(`怨念鲨鱼 #${i + 1} 被击杀`)
+      continue
+    }
+
+    const eatPriority: Array<keyof typeof fishEaten> = ['normal', 'good', 'rare']
+    let ate = false
+    for (const target of eatPriority) {
+      if (target === 'normal' && normal > 0) {
+        normal -= 1
+        fishEaten.normal += 1
+        ate = true
+        log.push(`怨念鲨鱼 #${i + 1} 吃掉 1 条普通鱼`)
+        break
+      }
+      if (target === 'good' && good > 0) {
+        good -= 1
+        fishEaten.good += 1
+        ate = true
+        log.push(`怨念鲨鱼 #${i + 1} 吃掉 1 条优质鱼`)
+        break
+      }
+      if (target === 'rare' && rare > 0) {
+        rare -= 1
+        fishEaten.rare += 1
+        ate = true
+        log.push(`怨念鲨鱼 #${i + 1} 吃掉 1 条稀有鱼`)
+        break
+      }
+    }
+    if (!ate) log.push(`怨念鲨鱼 #${i + 1} 没追到鱼`)
+  }
+
+  shark -= sharksDefeated
+
+  return {
+    deadFishCombined,
+    rareFishCombined,
+    sharksSummoned,
+    superRareSummoned,
+    sharksDefeated,
+    fishEaten,
+    finalCounts: {
+      normal,
+      good,
+      rare,
+      superRare,
+      dead: deadLeft,
+      shark,
+    },
+    log,
+  }
+}
+
 export type ReadingResultPayload = {
   startedAt: string
   endedAt: string
@@ -103,8 +191,11 @@ export type ReadingResultPayload = {
   normalFish: number
   goodFish: number
   rareFish: number
+  superRareFish: number
   deadFish: number
+  sharkCount: number
   fishResults: FishResult[]
+  battleReport: BattleReport
   playerName: string
   mode: GameMode
   fishAtStart?: number
@@ -128,7 +219,7 @@ export function Reading() {
   const meterAccRef = useRef(0)
   const progressRef = useRef(0)
   const statsRef = useRef<WindowStats>({ activeSeconds: 0, quietSeconds: 0, badSeconds: 0, worstBadStreak: 0, currentBadStreak: 0 })
-  const fishCountsRef = useRef<FishCounts>({ normal: 0, good: 0, rare: 0, dead: 0 })
+  const fishCountsRef = useRef<FishCounts>({ normal: 0, good: 0, rare: 0, superRare: 0, dead: 0, shark: 0 })
   const fishResultsRef = useRef<FishResult[]>([])
   const rareFishNameRef = useRef<string | null>(null)
   const segmentStatesRef = useRef<SegmentState[]>(Array.from({ length: 30 }, () => 'bad'))
@@ -140,7 +231,7 @@ export function Reading() {
   const [loopOn, setLoopOn] = useState(false)
   const [meterLevel, setMeterLevel] = useState(0)
   const [progressSeconds, setProgressSeconds] = useState(0)
-  const [lastTier, setLastTier] = useState<FishTier | null>(null)
+  const [lastTier, setLastTier] = useState<Exclude<FishTier, 'superRare'> | null>(null)
 
   const cleanupMic = useCallback(() => {
     stopMicPipeline(pipelineRef.current)
@@ -156,7 +247,7 @@ export function Reading() {
     meterAccRef.current = 0
     progressRef.current = 0
     statsRef.current = { activeSeconds: 0, quietSeconds: 0, badSeconds: 0, worstBadStreak: 0, currentBadStreak: 0 }
-    fishCountsRef.current = { normal: 0, good: 0, rare: 0, dead: 0 }
+    fishCountsRef.current = { normal: 0, good: 0, rare: 0, superRare: 0, dead: 0, shark: 0 }
     fishResultsRef.current = []
     rareFishNameRef.current = null
     segmentStatesRef.current = Array.from({ length: 30 }, () => 'bad')
@@ -258,31 +349,36 @@ export function Reading() {
       fishCountsRef.current = { ...fishCountsRef.current, [tier]: fishCountsRef.current[tier] + 1 }
       fishResultsRef.current = [...fishResultsRef.current, { tier, rareFishName: rareName, segments: [...segmentStatesRef.current] }]
       setLastTier(tier)
-      setDisplayFish(Math.min(24, summarizeFish(fishCountsRef.current)))
+      setDisplayFish(Math.min(48, summarizeFish(fishCountsRef.current)))
       resetCurrentFish()
     }
   }, loopOn)
 
   const endSession = useCallback(() => {
     const startedAt = startedAtRef.current ?? new Date().toISOString()
-    const counts = fishCountsRef.current
-    const fishEarned = summarizeFish(counts)
+    const rawCounts = fishCountsRef.current
+    const battleReport = buildBattle(rawCounts)
+    const finalCounts = battleReport.finalCounts
+    const fishEarned = finalCounts.normal + finalCounts.good + finalCounts.rare + finalCounts.superRare + finalCounts.dead
 
     const payload: ReadingResultPayload = {
       startedAt,
       endedAt: new Date().toISOString(),
       effectiveSeconds: effectiveRef.current,
       fishEarned,
-      normalFish: counts.normal,
-      goodFish: counts.good,
-      rareFish: counts.rare,
-      deadFish: counts.dead,
+      normalFish: finalCounts.normal,
+      goodFish: finalCounts.good,
+      rareFish: finalCounts.rare,
+      superRareFish: finalCounts.superRare,
+      deadFish: finalCounts.dead,
+      sharkCount: finalCounts.shark,
       fishResults: fishResultsRef.current,
+      battleReport,
       playerName: sessionPlayerRef.current,
       mode: sessionModeRef.current,
       fishAtEnd: fishEarned,
-      rareFishUnlocked: counts.rare > 0,
-      rareFishName: counts.rare > 0 ? rareFishNameRef.current ?? pickRareFishName(effectiveRef.current) : undefined,
+      rareFishUnlocked: rawCounts.rare > 0,
+      rareFishName: rawCounts.rare > 0 ? rareFishNameRef.current ?? pickRareFishName(effectiveRef.current) : undefined,
       rareFishBroken: false,
     }
 
@@ -304,6 +400,7 @@ export function Reading() {
   const progressPct = Math.min(100, (progressSeconds / FISH_WINDOW_SECONDS) * 100)
   const progressSegments = 30
   const fishCounts = fishCountsRef.current
+  const previewBattle = buildBattle(fishCounts)
   const subtitle = qualityText(sessionMode, lastTier)
 
   return (
@@ -319,7 +416,15 @@ export function Reading() {
       {errorMessage && <p style={{ color: 'var(--danger)', margin: 0, fontSize: '0.9rem' }}>{errorMessage}</p>}
 
       <div className="card reading-stage-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <AquariumTank full normalCount={fishCounts.normal} goodCount={fishCounts.good} rareCount={fishCounts.rare} deadCount={fishCounts.dead} />
+        <AquariumTank
+          full
+          normalCount={previewBattle.finalCounts.normal}
+          goodCount={previewBattle.finalCounts.good}
+          rareCount={previewBattle.finalCounts.rare}
+          superRareCount={previewBattle.finalCounts.superRare}
+          deadCount={previewBattle.finalCounts.dead}
+          sharkCount={previewBattle.finalCounts.shark}
+        />
         <div style={{ padding: '0.8rem 1rem 1rem' }}>
           <VolumeMeter level={meterLevel} activeThreshold={settingsRef.current.activeThreshold} quietThreshold={settingsRef.current.quietThreshold} />
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', margin: '0.95rem 0 0.35rem' }}>
@@ -334,7 +439,12 @@ export function Reading() {
             })}
           </div>
           <p style={{ margin: '0.7rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>累计时长 {effectiveSeconds.toFixed(1)} 秒 · 已结算 {displayFish} 条鱼/死鱼</p>
-          <p style={{ margin: '0.25rem 0 0', color: 'var(--accent-soft)', fontSize: '0.92rem', fontWeight: 700 }}>普通鱼 {fishCounts.normal} · 优质鱼 {fishCounts.good} · 稀有鱼 {fishCounts.rare} · 死鱼 {fishCounts.dead}</p>
+          <p style={{ margin: '0.25rem 0 0', color: 'var(--accent-soft)', fontSize: '0.92rem', fontWeight: 700 }}>
+            普通鱼 {fishCounts.normal} · 优质鱼 {fishCounts.good} · 稀有鱼 {fishCounts.rare} · 死鱼 {fishCounts.dead}
+          </p>
+          <p style={{ margin: '0.25rem 0 0', color: 'var(--sand)', fontSize: '0.9rem', fontWeight: 700 }}>
+            预览：超级稀有鱼 {previewBattle.finalCounts.superRare} · 怨念鲨鱼 {previewBattle.finalCounts.shark}
+          </p>
           <p style={{ margin: '0.3rem 0 0', color: lastTier === 'dead' ? 'var(--danger)' : 'var(--muted)', fontSize: '0.88rem' }}>{subtitle}</p>
         </div>
       </div>

@@ -41,9 +41,7 @@ export function Records() {
     <>
       <header>
         <h1 className="page-title">养鱼记录</h1>
-        <p style={{ color: 'var(--muted)', margin: '0.35rem 0 0', fontSize: '0.9rem' }}>
-          数据仅存于本机浏览器（localStorage）。
-        </p>
+        <p style={{ color: 'var(--muted)', margin: '0.35rem 0 0', fontSize: '0.9rem' }}>数据仅存于本机浏览器（localStorage）。</p>
       </header>
 
       <div className="card">
@@ -52,7 +50,8 @@ export function Records() {
           <li>会话次数：{stats.sessionCount}</li>
           <li>累计时长：{formatDuration(stats.totalEffectiveSeconds)}</li>
           <li>累计结果数：{stats.totalFish}</li>
-          <li>普通 / 优质 / 稀有 / 死鱼：{stats.totalNormalFish} / {stats.totalGoodFish} / {stats.totalRareFish} / {stats.totalDeadFish}</li>
+          <li>普通 / 优质 / 稀有 / 超级稀有 / 死鱼：{stats.totalNormalFish} / {stats.totalGoodFish} / {stats.totalRareFish} / {stats.totalSuperRareFish} / {stats.totalDeadFish}</li>
+          <li>现存怨念鲨鱼：{stats.totalSharks} · 被击杀怨念鲨鱼：{stats.totalSharksDefeated}</li>
           <li>早读 / 守护 / 自习：{stats.positiveSessions} / {stats.reverseSessions} / {stats.studySessions}</li>
         </ul>
       </div>
@@ -62,27 +61,18 @@ export function Records() {
         {rareFish.length > 0 ? (
           <div className="rare-grid" style={{ marginTop: '0.75rem' }}>
             {rareFish.map((r) => (
-              <RareFishCard
-                key={`${r.id}-rare`}
-                name={r.rareFishName!}
-                subtitle={`${r.playerName || '未命名玩家'} · ${formatShort(r.endedAt)}`}
-                compact
-              />
+              <RareFishCard key={`${r.id}-rare`} name={r.rareFishName!} subtitle={`${r.playerName || '未命名玩家'} · ${formatShort(r.endedAt)}`} compact />
             ))}
           </div>
         ) : (
-          <p style={{ margin: '0.6rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
-            这里就是稀有鱼图鉴。你当前还没解锁稀有鱼，所以这里暂时为空。
-          </p>
+          <p style={{ margin: '0.6rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>这里就是稀有鱼图鉴。你当前还没解锁稀有鱼，所以这里暂时为空。</p>
         )}
       </div>
 
       {records.length === 0 ? (
         <div className="card">
           <p style={{ margin: 0, color: 'var(--muted)' }}>还没有记录，去养一会儿鱼吧。</p>
-          <Link to="/" style={{ display: 'inline-block', marginTop: '0.75rem' }}>
-            <button type="button">回首页</button>
-          </Link>
+          <Link to="/" style={{ display: 'inline-block', marginTop: '0.75rem' }}><button type="button">回首页</button></Link>
         </div>
       ) : (
         <div className="card" style={{ padding: '0.5rem 0.65rem' }}>
@@ -92,25 +82,28 @@ export function Records() {
           </div>
           <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
             {records.map((r) => (
-              <li key={r.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.25rem 0.75rem', padding: '0.55rem 0.45rem', borderTop: '1px solid rgba(125, 211, 252, 0.12)', fontSize: '0.88rem' }}>
-                <div>
-                  <div style={{ color: 'var(--muted)' }}>{formatShort(r.endedAt)}</div>
-                  <div style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>
-                    {(r.playerName || '未命名玩家')} · {modeLabel(r)}
+              <li key={r.id} style={{ display: 'grid', gap: '0.35rem', padding: '0.65rem 0.45rem', borderTop: '1px solid rgba(125, 211, 252, 0.12)', fontSize: '0.88rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.25rem 0.75rem' }}>
+                  <div>
+                    <div style={{ color: 'var(--muted)' }}>{formatShort(r.endedAt)}</div>
+                    <div style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{(r.playerName || '未命名玩家')} · {modeLabel(r)}</div>
                   </div>
+                  <span style={{ textAlign: 'right', fontWeight: 600 }}>
+                    {(r.normalFish ?? r.fishEarned)} / {r.goodFish ?? 0} / {r.rareFish ?? 0} / {r.superRareFish ?? 0} / {r.deadFish ?? 0} · {formatDuration(r.effectiveSeconds)}
+                  </span>
                 </div>
-                <span style={{ textAlign: 'right', fontWeight: 600 }}>
-                  {(r.normalFish ?? r.fishEarned)} / {r.goodFish ?? 0} / {r.rareFish ?? 0} / {r.deadFish ?? 0} · {formatDuration(r.effectiveSeconds)}
-                </span>
+                {r.battleReport ? (
+                  <div style={{ fontSize: '0.82rem', color: 'var(--muted)', background: 'rgba(2, 132, 199, 0.08)', borderRadius: 10, padding: '0.45rem 0.55rem' }}>
+                    鲨鱼 {r.battleReport.sharksSummoned} / 击杀 {r.battleReport.sharksDefeated} / 超级稀有鱼 {r.battleReport.superRareSummoned} / 被吃 普通 {r.battleReport.fishEaten.normal} 优质 {r.battleReport.fishEaten.good} 稀有 {r.battleReport.fishEaten.rare}
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      <Link to="/">
-        <button type="button" className="secondary">回首页</button>
-      </Link>
+      <Link to="/"><button type="button" className="secondary">回首页</button></Link>
     </>
   )
 }

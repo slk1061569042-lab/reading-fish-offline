@@ -9,6 +9,9 @@ export type ResultLocationState = {
   endedAt: string
   effectiveSeconds: number
   fishEarned: number
+  normalFish: number
+  goodFish: number
+  rareFish: number
   playerName: string
   mode: GameMode
   fishAtStart?: number
@@ -26,17 +29,9 @@ function formatDuration(sec: number): string {
 }
 
 function modeLabel(mode: GameMode): string {
-  if (mode === 'reverse') return '守护模式'
-  if (mode === 'study') return '自习模式'
-  return '朗读模式'
-}
-
-function stageLabel(sec: number) {
-  if (sec >= 1200) return '超长坚持'
-  if (sec >= 900) return '长时专注'
-  if (sec >= 600) return '稳定鱼群'
-  if (sec >= 300) return '进入节奏'
-  return '起步中'
+  if (mode === 'reverse') return '守护鱼缸'
+  if (mode === 'study') return '自习养鱼'
+  return '早读养鱼'
 }
 
 export function Result() {
@@ -53,6 +48,9 @@ export function Result() {
       endedAt: data.endedAt,
       effectiveSeconds: data.effectiveSeconds,
       fishEarned: data.fishEarned,
+      normalFish: data.normalFish,
+      goodFish: data.goodFish,
+      rareFish: data.rareFish,
       playerName: data.playerName,
       mode: data.mode,
       fishAtStart: data.fishAtStart,
@@ -67,16 +65,12 @@ export function Result() {
       <>
         <h1 className="page-title">暂无结果</h1>
         <p style={{ color: 'var(--muted)' }}>请先完成一次会话。</p>
-        <Link to="/reading"><button type="button">去开始</button></Link>
+        <Link to="/"><button type="button">回首页</button></Link>
       </>
     )
   }
 
   const showFish = Math.min(24, Math.max(1, data.fishEarned))
-  const reverseDelta =
-    data.mode === 'reverse' && typeof data.fishAtStart === 'number' && typeof data.fishAtEnd === 'number'
-      ? data.fishAtEnd - data.fishAtStart
-      : null
 
   return (
     <>
@@ -90,30 +84,32 @@ export function Result() {
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <AquariumTank fishCount={showFish} />
         <div style={{ padding: '1rem' }}>
-          <p style={{ margin: 0, fontSize: '1.1rem' }}><strong>{data.fishEarned}</strong> 条普通鱼</p>
-          <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>有效时长 {formatDuration(data.effectiveSeconds)}</p>
-          <p style={{ margin: '0.35rem 0 0', color: 'var(--accent-soft)', fontSize: '0.9rem', fontWeight: 600 }}>达成阶段：{stageLabel(data.effectiveSeconds)}</p>
-          {data.rareFishUnlocked ? (
+          <p style={{ margin: 0, fontSize: '1.1rem' }}><strong>{data.fishEarned}</strong> 条鱼</p>
+          <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>总时长 {formatDuration(data.effectiveSeconds)}</p>
+          <p style={{ margin: '0.35rem 0 0', color: 'var(--accent-soft)', fontSize: '0.9rem', fontWeight: 600 }}>
+            普通鱼 {data.normalFish} · 优质鱼 {data.goodFish} · 稀有鱼 {data.rareFish}
+          </p>
+          {data.rareFishUnlocked && data.rareFishName ? (
             <div style={{ marginTop: '0.75rem' }}>
-              <RareFishCard name={data.rareFishName!} subtitle="本节课解锁" />
+              <RareFishCard name={data.rareFishName} subtitle="本轮首条稀有鱼" />
             </div>
-          ) : data.mode === 'study' ? (
-            <p style={{ margin: '0.35rem 0 0', color: data.rareFishBroken ? 'var(--warn)' : 'var(--muted)', fontSize: '0.9rem' }}>
-              {data.rareFishBroken ? '中途有声音打断，本轮未拿到稀有鱼。' : '本轮未达到 20 分钟连续安静。'}
-            </p>
           ) : null}
-          {reverseDelta !== null && (
-            <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
-              守护结果：起始 {data.fishAtStart} 条 → 结束 {data.fishAtEnd} 条（{reverseDelta >= 0 ? '+' : ''}{reverseDelta}）
-            </p>
-          )}
         </div>
       </div>
 
+      <div className="card">
+        <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--muted)' }}>
+          {data.mode === 'study'
+            ? '自习养鱼按每 15 秒安静质量结算。越安静，鱼越稀有。'
+            : data.mode === 'positive'
+              ? '早读养鱼按每 15 秒朗读质量结算。越稳定，鱼越稀有。'
+              : '守护鱼缸仍保留兼容展示。'}
+        </p>
+      </div>
+
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-        <Link to="/reading"><button type="button">再来一轮</button></Link>
+        <Link to="/"><button type="button">回首页</button></Link>
         <button type="button" className="secondary" onClick={() => navigate('/records')}>查看记录</button>
-        <Link to="/"><button type="button" className="secondary">回首页</button></Link>
       </div>
     </>
   )

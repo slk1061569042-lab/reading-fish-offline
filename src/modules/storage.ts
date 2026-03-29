@@ -22,6 +22,9 @@ export type ReadingRecord = {
   endedAt: string
   effectiveSeconds: number
   fishEarned: number
+  normalFish?: number
+  goodFish?: number
+  rareFish?: number
   playerName?: string
   mode?: GameMode
   fishAtStart?: number
@@ -217,6 +220,9 @@ export function recordStats(records: ReadingRecord[]) {
   const studySessions = records.filter((r) => r.mode === 'study').length
   const positiveSessions = records.filter((r) => r.mode === 'positive' || r.mode === undefined).length
   const rareFishSessions = records.filter((r) => r.rareFishUnlocked).length
+  const totalNormalFish = records.reduce((acc, r) => acc + (r.normalFish ?? r.fishEarned), 0)
+  const totalGoodFish = records.reduce((acc, r) => acc + (r.goodFish ?? 0), 0)
+  const totalRareFish = records.reduce((acc, r) => acc + (r.rareFish ?? 0), 0)
   return {
     sessionCount: records.length,
     totalFish,
@@ -225,6 +231,9 @@ export function recordStats(records: ReadingRecord[]) {
     studySessions,
     positiveSessions,
     rareFishSessions,
+    totalNormalFish,
+    totalGoodFish,
+    totalRareFish,
   }
 }
 

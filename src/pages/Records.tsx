@@ -22,7 +22,7 @@ function formatDuration(sec: number): string {
 function modeLabel(r: ReadingRecord): string {
   if (r.mode === 'reverse') return '守护'
   if (r.mode === 'study') return '自习'
-  return '朗读'
+  return '早读'
 }
 
 export function Records() {
@@ -40,7 +40,7 @@ export function Records() {
   return (
     <>
       <header>
-        <h1 className="page-title">阅读记录</h1>
+        <h1 className="page-title">养鱼记录</h1>
         <p style={{ color: 'var(--muted)', margin: '0.35rem 0 0', fontSize: '0.9rem' }}>
           数据仅存于本机浏览器（localStorage）。
         </p>
@@ -50,10 +50,10 @@ export function Records() {
         <strong>汇总</strong>
         <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.1rem', color: 'var(--muted)', fontSize: '0.92rem' }}>
           <li>会话次数：{stats.sessionCount}</li>
-          <li>累计有效时长：{formatDuration(stats.totalEffectiveSeconds)}</li>
-          <li>累计小鱼：{stats.totalFish}</li>
-          <li>稀有鱼解锁：{stats.rareFishSessions}</li>
-          <li>朗读 / 守护 / 自习：{stats.positiveSessions} / {stats.reverseSessions} / {stats.studySessions}</li>
+          <li>累计时长：{formatDuration(stats.totalEffectiveSeconds)}</li>
+          <li>累计鱼数：{stats.totalFish}</li>
+          <li>普通 / 优质 / 稀有：{stats.totalNormalFish} / {stats.totalGoodFish} / {stats.totalRareFish}</li>
+          <li>早读 / 守护 / 自习：{stats.positiveSessions} / {stats.reverseSessions} / {stats.studySessions}</li>
         </ul>
       </div>
 
@@ -76,8 +76,8 @@ export function Records() {
       {records.length === 0 ? (
         <div className="card">
           <p style={{ margin: 0, color: 'var(--muted)' }}>还没有记录，去养一会儿鱼吧。</p>
-          <Link to="/reading" style={{ display: 'inline-block', marginTop: '0.75rem' }}>
-            <button type="button">开始</button>
+          <Link to="/" style={{ display: 'inline-block', marginTop: '0.75rem' }}>
+            <button type="button">回首页</button>
           </Link>
         </div>
       ) : (
@@ -92,10 +92,12 @@ export function Records() {
                 <div>
                   <div style={{ color: 'var(--muted)' }}>{formatShort(r.endedAt)}</div>
                   <div style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>
-                    {(r.playerName || '未命名玩家')} · {modeLabel(r)}{r.rareFishName ? ` · 稀有鱼 ${r.rareFishName}` : ''}
+                    {(r.playerName || '未命名玩家')} · {modeLabel(r)}
                   </div>
                 </div>
-                <span style={{ textAlign: 'right', fontWeight: 600 }}>{r.fishEarned} 鱼 · {formatDuration(r.effectiveSeconds)}</span>
+                <span style={{ textAlign: 'right', fontWeight: 600 }}>
+                  {(r.normalFish ?? r.fishEarned)} / {r.goodFish ?? 0} / {r.rareFish ?? 0} · {formatDuration(r.effectiveSeconds)}
+                </span>
               </li>
             ))}
           </ul>

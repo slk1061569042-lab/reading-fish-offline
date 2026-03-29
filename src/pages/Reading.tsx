@@ -295,6 +295,7 @@ export function Reading() {
   }, [cleanupMic])
 
   const progressPct = Math.min(100, (progressSeconds / FISH_WINDOW_SECONDS) * 100)
+  const progressSegments = 30
   const fishCounts = fishCountsRef.current
   const subtitle = qualityText(sessionMode, lastTier)
 
@@ -324,8 +325,11 @@ export function Reading() {
             <span>本条鱼进度（固定 15 秒）</span>
             <span>{progressSeconds.toFixed(1)} / 15s</span>
           </div>
-          <div className="progress-wrap" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100}>
-            <div className="progress-bar" data-active={progressPct > 0 ? 'true' : 'false'} style={{ width: `${progressPct}%` }} />
+          <div className="progress-wrap progress-segments" role="progressbar" aria-valuenow={progressPct} aria-valuemin={0} aria-valuemax={100}>
+            {Array.from({ length: progressSegments }).map((_, i) => {
+              const filled = progressPct >= ((i + 1) / progressSegments) * 100
+              return <span key={i} className={`progress-segment ${filled ? 'is-filled' : ''}`} />
+            })}
           </div>
           <p style={{ margin: '0.7rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
             累计时长 {effectiveSeconds.toFixed(1)} 秒 · 已结算 {displayFish} 条鱼/死鱼

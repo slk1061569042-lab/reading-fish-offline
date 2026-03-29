@@ -19,9 +19,9 @@ function makeFish(i: number, w: number, h: number, tier: FishTier): Fish {
   if (tier === 'dead') {
     return {
       x: Math.random() * (w - 50) + 25,
-      y: Math.random() * (h * 0.18) + h * 0.02,
-      vx: (Math.random() - 0.5) * 0.06,
-      vy: 0,
+      y: Math.random() * (h * 0.4) + h * 0.2,
+      vx: (Math.random() < 0.5 ? -1 : 1) * (0.03 + Math.random() * 0.04),
+      vy: -0.12 - Math.random() * 0.04,
       phase: Math.random() * Math.PI * 2,
       tier,
       w: 30 + (i % 2) * 3,
@@ -120,27 +120,22 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
     let t = 0
 
     const syncFishPool = (w: number, h: number) => {
-      const desired: Fish[] = []
-      const counts = countsRef.current
-      for (let i = 0; i < counts.dead; i++) desired.push(makeFish(i, w, h, 'dead'))
-      for (let i = 0; i < counts.rare; i++) desired.push(makeFish(i, w, h, 'rare'))
-      for (let i = 0; i < counts.good; i++) desired.push(makeFish(i, w, h, 'good'))
-      for (let i = 0; i < counts.normal; i++) desired.push(makeFish(i, w, h, 'normal'))
-      if (!fishRef.current.length || fishRef.current.length !== desired.length) {
-        fishRef.current = desired
-        return
-      }
       const current = fishRef.current
-      let cursor = 0
-      for (const tier of ['dead', 'rare', 'good', 'normal'] as FishTier[]) {
-        const targetCount = counts[tier]
-        for (let i = 0; i < targetCount; i++) {
-          const f = current[cursor]
-          if (!f || f.tier !== tier) current[cursor] = makeFish(i, w, h, tier)
-          cursor += 1
+      const desiredCounts = countsRef.current
+
+      const next: Fish[] = []
+      const tierOrder: FishTier[] = ['dead', 'rare', 'good', 'normal']
+
+      for (const tier of tierOrder) {
+        const existing = current.filter((f) => f.tier === tier)
+        const target = desiredCounts[tier]
+
+        for (let i = 0; i < target; i++) {
+          next.push(existing[i] ?? makeFish(i, w, h, tier))
         }
       }
-      current.length = desired.length
+
+      fishRef.current = next
     }
 
     const draw = (now: number) => {
@@ -185,15 +180,29 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
 
       for (const f of fishRef.current) {
         if (f.tier === 'dead') {
+          f.phase += dt * 0.03
+          const surfaceY = h * 0.12 + Math.sin(f.phase) * 3
           f.x += f.vx * dt
-          f.y = Math.min(h * 0.12, f.y - 0.08 * dt)
-          if (f.x < 16 || f.x > w - 16) f.vx *= -1
+          if (f.y > surfaceY) {
+            f.y = Math.max(surfaceY, f.y + f.vy * dt)
+          } else {
+            f.y = surfaceY
+          }
+          if (f.x < 24 || f.x > w - 24) {
+            f.vx *= -1
+            f.x = Math.max(24, Math.min(w - 24, f.x))
+          }
+
           ctx.save()
           ctx.translate(f.x, f.y)
-          ctx.rotate(Math.PI / 2)
-          ctx.fillStyle = 'rgba(148, 163, 184, 0.85)'
+          ctx.rotate(Math.PI / 10)
+          ctx.fillStyle = 'rgba(226, 232, 240, 0.98)'
           ctx.beginPath()
           ctx.ellipse(0, 0, f.w * 0.5, f.h * 0.5, 0, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.fillStyle = 'rgba(148, 163, 184, 0.95)'
+          ctx.beginPath()
+          ctx.ellipse(0, 2, f.w * 0.42, f.h * 0.32, 0, 0, Math.PI * 2)
           ctx.fill()
           ctx.fillStyle = 'rgba(100, 116, 139, 0.95)'
           ctx.beginPath()
@@ -202,7 +211,7 @@ export function AquariumTank({ fishCount = 0, normalCount, goodCount, rareCount,
           ctx.lineTo(-f.w * 0.95, f.h * 0.35)
           ctx.closePath()
           ctx.fill()
-          ctx.strokeStyle = 'rgba(255,255,255,0.8)'
+          ctx.strokeStyle = 'rgba(51, 65, 85, 0.95)'
           ctx.lineWidth = 1.2
           ctx.beginPath()
           ctx.moveTo(f.w * 0.12, -f.h * 0.18)

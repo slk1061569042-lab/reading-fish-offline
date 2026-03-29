@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AquariumTank } from '../components/AquariumTank'
-import { loadProfile, saveProfile, loadSettings } from '../modules/storage'
+import { RareFishCard } from '../components/RareFishCard'
+import { latestRareFish, loadProfile, saveProfile, loadSettings, loadRecords } from '../modules/storage'
 
 function modeLabel(mode: string): string {
   switch (mode) {
@@ -17,12 +18,14 @@ function modeLabel(mode: string): string {
 export function Home() {
   const [playerName, setPlayerName] = useState('')
   const [currentMode, setCurrentMode] = useState('positive')
+  const [latestRare, setLatestRare] = useState(() => latestRareFish(loadRecords()))
 
   useEffect(() => {
     const p = loadProfile()
     const s = loadSettings()
     setPlayerName(p.playerName)
     setCurrentMode(s.mode)
+    setLatestRare(latestRareFish(loadRecords()))
   }, [])
 
   useEffect(() => {
@@ -75,12 +78,28 @@ export function Home() {
         </div>
       </div>
 
+      {latestRare ? (
+        <div className="card">
+          <strong>最近获得的稀有鱼</strong>
+          <div style={{ marginTop: '0.75rem' }}>
+            <RareFishCard name={latestRare.rareFishName!} subtitle={`${latestRare.playerName || '未命名玩家'} · 最新解锁`} compact />
+          </div>
+        </div>
+      ) : (
+        <div className="card">
+          <strong>稀有鱼目标</strong>
+          <p style={{ margin: '0.5rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>
+            在自习模式下连续安静 20 分钟，就能解锁一条稀有鱼。
+          </p>
+        </div>
+      )}
+
       <div className="card">
         <strong>模式说明</strong>
         <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.1rem', color: 'var(--muted)', fontSize: '0.9rem' }}>
           <li>朗读：出声越稳定，鱼越多</li>
           <li>守护：初始有鱼，安静太久会掉鱼</li>
-          <li>自习：越安静越能养出更多鱼，还会进化</li>
+          <li>自习：越安静越能养出更多鱼，还能解锁稀有鱼</li>
         </ul>
       </div>
     </>

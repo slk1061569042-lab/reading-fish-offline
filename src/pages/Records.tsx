@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { clearAllRecords, loadRecords, recordStats, type ReadingRecord } from '../modules/storage'
+import { RareFishCard } from '../components/RareFishCard'
+import { clearAllRecords, listRareFish, loadRecords, recordStats, type ReadingRecord } from '../modules/storage'
 
 function formatShort(iso: string): string {
   try {
@@ -27,6 +28,7 @@ function modeLabel(r: ReadingRecord): string {
 export function Records() {
   const [records, setRecords] = useState<ReadingRecord[]>(() => loadRecords())
   const stats = useMemo(() => recordStats(records), [records])
+  const rareFish = useMemo(() => listRareFish(records), [records])
 
   const clearAll = () => {
     if (!records.length) return
@@ -50,9 +52,26 @@ export function Records() {
           <li>会话次数：{stats.sessionCount}</li>
           <li>累计有效时长：{formatDuration(stats.totalEffectiveSeconds)}</li>
           <li>累计小鱼：{stats.totalFish}</li>
+          <li>稀有鱼解锁：{stats.rareFishSessions}</li>
           <li>朗读 / 守护 / 自习：{stats.positiveSessions} / {stats.reverseSessions} / {stats.studySessions}</li>
         </ul>
       </div>
+
+      {rareFish.length > 0 && (
+        <div className="card">
+          <strong>稀有鱼图鉴</strong>
+          <div className="rare-grid" style={{ marginTop: '0.75rem' }}>
+            {rareFish.map((r) => (
+              <RareFishCard
+                key={`${r.id}-rare`}
+                name={r.rareFishName!}
+                subtitle={`${r.playerName || '未命名玩家'} · ${formatShort(r.endedAt)}`}
+                compact
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {records.length === 0 ? (
         <div className="card">
@@ -72,7 +91,9 @@ export function Records() {
               <li key={r.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.25rem 0.75rem', padding: '0.55rem 0.45rem', borderTop: '1px solid rgba(125, 211, 252, 0.12)', fontSize: '0.88rem' }}>
                 <div>
                   <div style={{ color: 'var(--muted)' }}>{formatShort(r.endedAt)}</div>
-                  <div style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{(r.playerName || '未命名玩家')} · {modeLabel(r)}</div>
+                  <div style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>
+                    {(r.playerName || '未命名玩家')} · {modeLabel(r)}{r.rareFishName ? ` · 稀有鱼 ${r.rareFishName}` : ''}
+                  </div>
                 </div>
                 <span style={{ textAlign: 'right', fontWeight: 600 }}>{r.fishEarned} 鱼 · {formatDuration(r.effectiveSeconds)}</span>
               </li>

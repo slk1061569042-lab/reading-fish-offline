@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AquariumTank } from '../components/AquariumTank'
+import { RareFishCard } from '../components/RareFishCard'
 import { appendRecord, type GameMode } from '../modules/storage'
 
 export type ResultLocationState = {
@@ -93,9 +94,9 @@ export function Result() {
           <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>有效时长 {formatDuration(data.effectiveSeconds)}</p>
           <p style={{ margin: '0.35rem 0 0', color: 'var(--accent-soft)', fontSize: '0.9rem', fontWeight: 600 }}>达成阶段：{stageLabel(data.effectiveSeconds)}</p>
           {data.rareFishUnlocked ? (
-            <p style={{ margin: '0.35rem 0 0', color: 'var(--sand)', fontSize: '0.92rem', fontWeight: 700 }}>
-              解锁稀有鱼：{data.rareFishName}
-            </p>
+            <div style={{ marginTop: '0.75rem' }}>
+              <RareFishCard name={data.rareFishName!} subtitle="本节课解锁" />
+            </div>
           ) : data.mode === 'study' ? (
             <p style={{ margin: '0.35rem 0 0', color: data.rareFishBroken ? 'var(--warn)' : 'var(--muted)', fontSize: '0.9rem' }}>
               {data.rareFishBroken ? '中途有声音打断，本轮未拿到稀有鱼。' : '本轮未达到 20 分钟连续安静。'}

@@ -227,3 +227,11 @@ export function recordStats(records: ReadingRecord[]) {
     rareFishSessions,
   }
 }
+
+export function listRareFish(records: ReadingRecord[]): ReadingRecord[] {
+  return records.filter((r) => r.rareFishUnlocked && r.rareFishName)
+}
+
+export function latestRareFish(records: ReadingRecord[]): ReadingRecord | null {
+  return listRareFish(records)[0] ?? null
+}

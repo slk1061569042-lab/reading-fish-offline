@@ -45,6 +45,20 @@ export type BestiaryEntry = {
   unlockHint: string
 }
 
+function countGeneratedTier(record: ReadingRecord, tier: Exclude<FishTier, 'superRare'>): number {
+  if (record.fishResults?.length) {
+    return record.fishResults.filter((item) => item.tier === tier).length
+  }
+  if (tier === 'normal') return record.normalFish ?? 0
+  if (tier === 'good') return record.goodFish ?? 0
+  if (tier === 'rare') return record.rareFish ?? 0
+  return record.deadFish ?? 0
+}
+
+function hasGeneratedRare(record: ReadingRecord): boolean {
+  return countGeneratedTier(record, 'rare') > 0 || !!record.rareFishUnlocked || !!record.rareFishName
+}
+
 export type UserProfile = {
   playerName: string
   mode: GameMode
@@ -322,7 +336,7 @@ export function recordStats(records: ReadingRecord[]) {
 }
 
 export function listRareFish(records: ReadingRecord[]): ReadingRecord[] {
-  return records.filter((r) => r.rareFishUnlocked && r.rareFishName)
+  return records.filter((r) => hasGeneratedRare(r) && r.rareFishName)
 }
 
 export function latestRareFish(records: ReadingRecord[]): ReadingRecord | null {
@@ -335,19 +349,19 @@ function firstUnlockedAt(records: ReadingRecord[], predicate: (r: ReadingRecord)
 }
 
 export function getBestiary(records: ReadingRecord[]): BestiaryEntry[] {
-  const totalNormal = records.reduce((acc, r) => acc + (r.normalFish ?? 0), 0)
-  const totalGood = records.reduce((acc, r) => acc + (r.goodFish ?? 0), 0)
-  const totalRare = records.reduce((acc, r) => acc + (r.rareFish ?? 0), 0)
-  const totalSuperRare = records.reduce((acc, r) => acc + (r.superRareFish ?? 0) + (r.battleReport?.superRareSummoned ?? 0), 0)
-  const totalDead = records.reduce((acc, r) => acc + (r.deadFish ?? 0), 0)
-  const totalShark = records.reduce((acc, r) => acc + (r.battleReport?.sharksSummoned ?? 0) + (r.sharkCount ?? 0), 0)
+  const totalNormal = records.reduce((acc, r) => acc + countGeneratedTier(r, 'normal'), 0)
+  const totalGood = records.reduce((acc, r) => acc + countGeneratedTier(r, 'good'), 0)
+  const totalRare = records.reduce((acc, r) => acc + countGeneratedTier(r, 'rare'), 0)
+  const totalSuperRare = records.reduce((acc, r) => acc + (r.battleReport?.superRareSummoned ?? 0), 0)
+  const totalDead = records.reduce((acc, r) => acc + countGeneratedTier(r, 'dead'), 0)
+  const totalShark = records.reduce((acc, r) => acc + (r.battleReport?.sharksSummoned ?? 0), 0)
 
   return [
     {
       id: 'normal',
       name: '普通鱼',
       unlocked: totalNormal > 0,
-      unlockedAt: firstUnlockedAt(records, (r) => (r.normalFish ?? 0) > 0),
+      unlockedAt: firstUnlockedAt(records, (r) => countGeneratedTier(r, 'normal') > 0),
       count: totalNormal,
       description: '基础收获，稳定养成的主力鱼群。',
       unlockHint: '完成一次普通质量结算。',
@@ -356,7 +370,7 @@ export function getBestiary(records: ReadingRecord[]): BestiaryEntry[] {
       id: 'good',
       name: '优质鱼',
       unlocked: totalGood > 0,
-      unlockedAt: firstUnlockedAt(records, (r) => (r.goodFish ?? 0) > 0),
+      unlockedAt: firstUnlockedAt(records, (r) => countGeneratedTier(r, 'good') > 0),
       count: totalGood,
       description: '更活跃更快的鱼，表现稳定时获得。',
       unlockHint: '提升朗读/自习质量，拿到优质结算。',
@@ -364,8 +378,8 @@ export function getBestiary(records: ReadingRecord[]): BestiaryEntry[] {
     {
       id: 'rare',
       name: '稀有鱼',
-      unlocked: totalRare > 0 || records.some((r) => !!r.rareFishName),
-      unlockedAt: firstUnlockedAt(records, (r) => (r.rareFish ?? 0) > 0 || !!r.rareFishName),
+      unlocked: records.some(hasGeneratedRare),
+      unlockedAt: firstUnlockedAt(records, (r) => hasGeneratedRare(r)),
       count: totalRare,
       description: '具备反击能力的珍稀个体。',
       unlockHint: '拿到高质量结算，解锁第一条稀有鱼。',
@@ -374,7 +388,7 @@ export function getBestiary(records: ReadingRecord[]): BestiaryEntry[] {
       id: 'superRare',
       name: '超级稀有鱼',
       unlocked: totalSuperRare > 0,
-      unlockedAt: firstUnlockedAt(records, (r) => (r.superRareFish ?? 0) > 0 || (r.battleReport?.superRareSummoned ?? 0) > 0),
+      unlockedAt: firstUnlockedAt(records, (r) => (r.battleReport?.superRareSummoned ?? 0) > 0),
       count: totalSuperRare,
       description: '10 条稀有鱼合体后诞生，拥有生命值和攻击力。',
       unlockHint: '累计 10 条稀有鱼完成合体。',
@@ -383,7 +397,7 @@ export function getBestiary(records: ReadingRecord[]): BestiaryEntry[] {
       id: 'dead',
       name: '死鱼',
       unlocked: totalDead > 0,
-      unlockedAt: firstUnlockedAt(records, (r) => (r.deadFish ?? 0) > 0),
+      unlockedAt: firstUnlockedAt(records, (r) => countGeneratedTier(r, 'dead') > 0),
       count: totalDead,
       description: '质量崩坏时出现，也是怨念鲨鱼的合成材料。',
       unlockHint: '经历一次失败结算。',
@@ -392,7 +406,7 @@ export function getBestiary(records: ReadingRecord[]): BestiaryEntry[] {
       id: 'shark',
       name: '怨念鲨鱼',
       unlocked: totalShark > 0,
-      unlockedAt: firstUnlockedAt(records, (r) => (r.battleReport?.sharksSummoned ?? 0) > 0 || (r.sharkCount ?? 0) > 0),
+      unlockedAt: firstUnlockedAt(records, (r) => (r.battleReport?.sharksSummoned ?? 0) > 0),
       count: totalShark,
       description: '由 10 条死鱼合成，会追猎鱼群并参与战斗。',
       unlockHint: '累计 10 条死鱼，召出第一条怨念鲨鱼。',

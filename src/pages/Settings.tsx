@@ -24,10 +24,53 @@ function modeLabel(mode: GameMode) {
     case 'reverse':
       return '守护模式：开始自带鱼，安静太久会掉鱼。'
     case 'study':
-      return '自习模式：持续安静越久，鱼越多，还能触发进化。'
+      return '自习模式：持续安静越久，鱼越多，还能触发稀有鱼。'
     default:
       return '朗读模式：持续出声阅读，鱼会越来越多。'
   }
+}
+
+function formatDecimalInput(value: number, digits = 3) {
+  return String(value.toFixed(digits)).replace(/0+$/, '').replace(/\.$/, '')
+}
+
+function parseDecimalInput(raw: string, fallback: number) {
+  const normalized = raw.replace(/,/g, '.').trim()
+  if (!normalized) return fallback
+  const num = Number(normalized)
+  return Number.isFinite(num) ? num : fallback
+}
+
+function DecimalInput({ value, onChange, min, max, placeholder }: {
+  value: number
+  onChange: (next: number) => void
+  min: number
+  max: number
+  placeholder?: string
+}) {
+  const [text, setText] = useState(formatDecimalInput(value))
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      pattern="[0-9]*[.,]?[0-9]*"
+      placeholder={placeholder}
+      value={text}
+      onChange={(e) => {
+        const nextText = e.target.value
+        setText(nextText)
+        const parsed = parseDecimalInput(nextText, value)
+        if (Number.isFinite(parsed)) {
+          const clamped = Math.min(max, Math.max(min, parsed))
+          onChange(clamped)
+        }
+      }}
+      onBlur={() => setText(formatDecimalInput(Math.min(max, Math.max(min, value))))}
+      autoComplete="off"
+      spellCheck={false}
+    />
+  )
 }
 
 export function Settings() {
@@ -61,12 +104,12 @@ export function Settings() {
       <header>
         <h1 className="page-title">设置</h1>
         <p style={{ color: 'var(--muted)', margin: '0.35rem 0 0', fontSize: '0.92rem' }}>
-          模式、阈值与节奏保存在本机。阅读页会在下次开始麦克风时应用。
+          这里保留灵敏度与节奏参数；首页直接选“早读养鱼 / 自习养鱼”。
         </p>
       </header>
 
       <form className="card settings-form" onSubmit={onSubmit}>
-        <Field label="模式选择" hint={modeLabel(form.mode)}>
+        <Field label="默认模式" hint={modeLabel(form.mode)}>
           <div className="mode-switch" role="group" aria-label="模式选择">
             <button type="button" className={form.mode === 'positive' ? '' : 'secondary'} onClick={() => update('mode', 'positive')}>
               朗读
@@ -80,20 +123,20 @@ export function Settings() {
           </div>
         </Field>
 
-        <Field label="朗读判定阈值 (RMS)" hint="越高越不容易进入「正在阅读」。自习模式下则代表噪声上限参考。">
-          <input type="number" step={0.001} min={0.001} max={0.08} value={form.activeThreshold} onChange={(e) => update('activeThreshold', Number(e.target.value))} />
+        <Field label="朗读判定阈值 (RMS)" hint="移动端已改成稳定的小数输入，不再用 number 输入框。">
+          <DecimalInput value={form.activeThreshold} min={0.001} max={0.08} onChange={(v) => update('activeThreshold', v)} placeholder="如 0.012" />
         </Field>
         <Field label="静音阈值 (RMS)" hint="低于此值更容易被认为安静；需小于朗读阈值。">
-          <input type="number" step={0.001} min={0.0005} max={0.06} value={form.quietThreshold} onChange={(e) => update('quietThreshold', Number(e.target.value))} />
+          <DecimalInput value={form.quietThreshold} min={0.0005} max={0.06} onChange={(v) => update('quietThreshold', v)} placeholder="如 0.006" />
         </Field>
         <Field label="静音保持 (毫秒)" hint="连续安静多久后视为稳定安静 / 暂停。">
-          <input type="number" step={10} min={100} max={3000} value={form.quietHoldMs} onChange={(e) => update('quietHoldMs', Number(e.target.value))} />
+          <input type="number" inputMode="numeric" step={10} min={100} max={3000} value={form.quietHoldMs} onChange={(e) => update('quietHoldMs', Number(e.target.value))} />
         </Field>
         <Field label="鱼节奏 (秒)" hint="累计满此秒数得到或恢复一条鱼；自习模式也用这个节奏。">
-          <input type="number" step={1} min={3} max={120} value={form.fishEverySeconds} onChange={(e) => update('fishEverySeconds', Number(e.target.value))} />
+          <input type="number" inputMode="numeric" step={1} min={3} max={120} value={form.fishEverySeconds} onChange={(e) => update('fishEverySeconds', Number(e.target.value))} />
         </Field>
         <Field label="守护模式初始鱼数" hint="开始会话时的鱼缸数量（0–24）。">
-          <input type="number" step={1} min={0} max={24} value={form.reverseInitialFish} onChange={(e) => update('reverseInitialFish', Number(e.target.value))} />
+          <input type="number" inputMode="numeric" step={1} min={0} max={24} value={form.reverseInitialFish} onChange={(e) => update('reverseInitialFish', Number(e.target.value))} />
         </Field>
 
         <div className="settings-actions">
@@ -104,17 +147,13 @@ export function Settings() {
       </form>
 
       <div className="card" style={{ fontSize: '0.88rem', color: 'var(--muted)' }}>
-        <strong style={{ color: 'var(--text)' }}>节点进化</strong>
+        <strong style={{ color: 'var(--text)' }}>默认值参考</strong>
         <ul style={{ margin: '0.45rem 0 0', paddingLeft: '1.1rem' }}>
-          <li>3 分钟：鱼苗</li>
-          <li>5 分钟：小鱼群</li>
-          <li>10 分钟：大鱼出现</li>
-          <li>15 分钟：发光鱼</li>
-          <li>20 分钟：鱼缸升级</li>
+          <li>朗读阈值：{DEFAULT_SETTINGS.activeThreshold}</li>
+          <li>静音阈值：{DEFAULT_SETTINGS.quietThreshold}</li>
+          <li>静音保持：{DEFAULT_SETTINGS.quietHoldMs} ms</li>
+          <li>鱼节奏：{DEFAULT_SETTINGS.fishEverySeconds} s</li>
         </ul>
-        <p style={{ margin: '0.5rem 0 0' }}>
-          默认值：朗读 {DEFAULT_SETTINGS.activeThreshold} · 静音 {DEFAULT_SETTINGS.quietThreshold} · 节奏 {DEFAULT_SETTINGS.fishEverySeconds}s
-        </p>
       </div>
 
       <Link to="/">

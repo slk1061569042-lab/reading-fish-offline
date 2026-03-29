@@ -328,3 +328,44 @@ button.secondary {
   font-size: 0.82rem;
   color: var(--muted);
 }
+
+.mode-card-grid {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.mode-entry-card {
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(14, 72, 110, 0.92), rgba(8, 47, 73, 0.98));
+  border: 1px solid rgba(125, 211, 252, 0.22);
+  box-shadow: none;
+}
+
+.mode-entry-card--study {
+  border-color: rgba(253, 230, 138, 0.28);
+}
+
+.mode-entry-card__tank {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.mode-entry-card__body {
+  padding: 0.9rem 1rem 1rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.mode-entry-card__title {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.mode-entry-card__desc {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}

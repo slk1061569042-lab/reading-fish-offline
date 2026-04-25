@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { RareFishCard } from '../components/RareFishCard'
-import { clearAllRecords, getRareFishDex, loadRecords, recordStats, type ReadingRecord } from '../modules/storage'
+import { clearAllRecords, getRecordFinalCounts, getRareFishDex, loadRecords, recordStats, type ReadingRecord } from '../modules/storage'
 
 function formatShort(iso: string): string {
   try {
@@ -89,12 +89,12 @@ export function Records() {
                     <div style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>{(r.playerName || '未命名玩家')} · {modeLabel(r)}</div>
                   </div>
                   <span style={{ textAlign: 'right', fontWeight: 600 }}>
-                    {(r.normalFish ?? r.fishEarned)} / {r.goodFish ?? 0} / {r.rareFish ?? 0} / {r.superRareFish ?? 0} / {r.deadFish ?? 0} · {formatDuration(r.effectiveSeconds)}
+                    {(() => { const fc = getRecordFinalCounts(r); return `${fc.normal} / ${fc.good} / ${fc.rare} / ${fc.superRare} / ${fc.dead} / 🦈${fc.shark}` })()} · {formatDuration(r.effectiveSeconds)}
                   </span>
                 </div>
                 {r.battleReport ? (
                   <div style={{ fontSize: '0.82rem', color: 'var(--muted)', background: 'rgba(2, 132, 199, 0.08)', borderRadius: 10, padding: '0.45rem 0.55rem' }}>
-                    鲨鱼 {r.battleReport.sharksSummoned} / 击杀 {r.battleReport.sharksDefeated} / 超级稀有鱼 {r.battleReport.superRareSummoned} / 被吃 普通 {r.battleReport.fishEaten.normal} 优质 {r.battleReport.fishEaten.good} 稀有 {r.battleReport.fishEaten.rare}
+                    召出鲨鱼 {r.battleReport.sharksSummoned} / 击杀 {r.battleReport.sharksDefeated} / 超稀有 {r.battleReport.superRareSummoned} / 超稀有阵亡 {r.battleReport.superRareDefeated} / 被吃 普通 {r.battleReport.fishEaten.normal} 优质 {r.battleReport.fishEaten.good} 稀有 {r.battleReport.fishEaten.rare} 超稀有 {r.battleReport.fishEaten.superRare}
                   </div>
                 ) : null}
               </li>

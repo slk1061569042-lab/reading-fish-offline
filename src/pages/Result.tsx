@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AquariumTank } from '../components/AquariumTank'
 import { RareFishCard } from '../components/RareFishCard'
-import { appendRecord, type BattleReport, type FishResult, type GameMode } from '../modules/storage'
+import { appendRecord, sumFinalTankCounts, type BattleReport, type FishResult, type GameMode } from '../modules/storage'
 
 export type ResultLocationState = {
   startedAt: string
@@ -53,33 +53,35 @@ export function Result() {
   const navigate = useNavigate()
   const data = location.state as ResultLocationState | null
   const savedRef = useRef(false)
+  const finalCounts = data?.battleReport.finalCounts
+  const totalDisplayed = finalCounts ? sumFinalTankCounts(finalCounts) : 0
 
   useEffect(() => {
-    if (!data || savedRef.current) return
+    if (!data || !finalCounts || savedRef.current) return
     savedRef.current = true
     appendRecord({
       startedAt: data.startedAt,
       endedAt: data.endedAt,
       effectiveSeconds: data.effectiveSeconds,
-      fishEarned: data.fishEarned,
-      normalFish: data.normalFish,
-      goodFish: data.goodFish,
-      rareFish: data.rareFish,
-      superRareFish: data.superRareFish,
-      deadFish: data.deadFish,
-      sharkCount: data.sharkCount,
+      fishEarned: totalDisplayed,
+      normalFish: finalCounts.normal,
+      goodFish: finalCounts.good,
+      rareFish: finalCounts.rare,
+      superRareFish: finalCounts.superRare,
+      deadFish: finalCounts.dead,
+      sharkCount: finalCounts.shark,
       fishResults: data.fishResults,
       battleReport: data.battleReport,
       playerName: data.playerName,
       mode: data.mode,
       fishAtStart: data.fishAtStart,
-      fishAtEnd: data.fishAtEnd,
+      fishAtEnd: totalDisplayed,
       rareFishUnlocked: data.rareFishUnlocked,
       rareFishName: data.rareFishName,
     })
-  }, [data])
+  }, [data, finalCounts, totalDisplayed])
 
-  if (!data) {
+  if (!data || !finalCounts) {
     return <><h1 className="page-title">暂无结果</h1><p style={{ color: 'var(--muted)' }}>请先完成一次会话。</p><Link to="/"><button type="button">回首页</button></Link></>
   }
 
@@ -91,12 +93,12 @@ export function Result() {
       </header>
 
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <AquariumTank normalCount={data.normalFish} goodCount={data.goodFish} rareCount={data.rareFish} superRareCount={data.superRareFish} deadCount={data.deadFish} sharkCount={data.sharkCount} />
+        <AquariumTank normalCount={finalCounts.normal} goodCount={finalCounts.good} rareCount={finalCounts.rare} superRareCount={finalCounts.superRare} deadCount={finalCounts.dead} sharkCount={finalCounts.shark} />
         <div style={{ padding: '1rem' }}>
-          <p style={{ margin: 0, fontSize: '1.1rem' }}><strong>{data.fishEarned}</strong> 条最终存活结果</p>
+          <p style={{ margin: 0, fontSize: '1.1rem' }}><strong>{totalDisplayed}</strong> 条最终留存</p>
           <p style={{ margin: '0.35rem 0 0', color: 'var(--muted)', fontSize: '0.9rem' }}>总时长 {formatDuration(data.effectiveSeconds)}</p>
           <p style={{ margin: '0.35rem 0 0', color: 'var(--accent-soft)', fontSize: '0.9rem', fontWeight: 600 }}>
-            普通鱼 {data.normalFish} · 优质鱼 {data.goodFish} · 稀有鱼 {data.rareFish} · 超级稀有鱼 {data.superRareFish} · 死鱼 {data.deadFish} · 怨念鲨鱼 {data.sharkCount}
+            普通鱼 {finalCounts.normal} · 优质鱼 {finalCounts.good} · 稀有鱼 {finalCounts.rare} · 超级稀有鱼 {finalCounts.superRare} · 死鱼 {finalCounts.dead} · 怨念鲨鱼 {finalCounts.shark}
           </p>
           {data.rareFishUnlocked && data.rareFishName ? <div style={{ marginTop: '0.75rem' }}><RareFishCard name={data.rareFishName} subtitle="本轮首条稀有鱼" /></div> : null}
         </div>

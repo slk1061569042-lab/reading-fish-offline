@@ -4,7 +4,7 @@ export type GameMode = 'positive' | 'reverse' | 'study'
 export type SegmentState = 'good' | 'warn' | 'bad'
 export type FishTier = 'normal' | 'good' | 'rare' | 'superRare' | 'dead'
 export type BestiarySpecies = 'normal' | 'good' | 'rare' | 'superRare' | 'dead' | 'shark'
-export type RareFishSpeciesId = 'dawn-butterfly' | 'calm-gold' | 'moon-veil' | 'sunset-star'
+export type RareFishSpeciesId = 'dawn-butterfly' | 'calm-gold' | 'moon-veil' | 'sunset-star' | 'abyss-dark' | 'aurora-frost' | 'crimson-blaze' | 'sky-cloud'
 
 export type FishResult = {
   tier: Exclude<FishTier, 'superRare'>
@@ -35,6 +35,8 @@ export type BattleReport = {
     shark: number
   }
 }
+
+export type FinalTankCounts = BattleReport['finalCounts']
 
 export type BestiaryEntry = {
   id: BestiarySpecies
@@ -97,6 +99,38 @@ const RARE_FISH_DEX: Array<{
     skill: '霞鳞爆发：在关键回合提供更高伤害。',
     description: '偏爆发型的稀有鱼，晚霞色鳞片明显，是高压回合的输出点。',
     unlockHint: '第一次真正刷出晚霞星鳞。',
+  },
+  {
+    id: 'abyss-dark',
+    name: '深渊暗鳞',
+    order: 5,
+    skill: '深渊压制：降低怨念鲨鱼的攻击力一回合。',
+    description: '来自深海的神秘个体，暗色鳞片几乎不反光，擅长压制强敌。',
+    unlockHint: '第一次真正刷出深渊暗鳞。',
+  },
+  {
+    id: 'aurora-frost',
+    name: '极光霜鳍',
+    order: 6,
+    skill: '霜鳍护盾：为鱼群提供一次格挡，减少被吃数量。',
+    description: '极地冰川孕育的稀有种，霜蓝色鳍膜在光下折射极光色彩。',
+    unlockHint: '第一次真正刷出极光霜鳍。',
+  },
+  {
+    id: 'crimson-blaze',
+    name: '赤焰烈尾',
+    order: 7,
+    skill: '烈焰冲锋：首轮攻击伤害翻倍。',
+    description: '火红色尾鳍如烈焰，爆发力极强，是近战主力。',
+    unlockHint: '第一次真正刷出赤焰烈尾。',
+  },
+  {
+    id: 'sky-cloud',
+    name: '苍穹云斑',
+    order: 8,
+    skill: '云斑迷踪：使己方鱼群本回合有几率躲避攻击。',
+    description: '身上布满云状斑纹，行动飘逸，擅长规避伤害。',
+    unlockHint: '第一次真正刷出苍穹云斑。',
   },
 ]
 
@@ -247,6 +281,37 @@ function normalizeRecord(r: ReadingRecord): ReadingRecord {
   }
 }
 
+function sanitizeCount(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.floor(value)) : fallback
+}
+
+function normalizeFinalTankCounts(value: Partial<FinalTankCounts> | undefined): FinalTankCounts {
+  return {
+    normal: sanitizeCount(value?.normal),
+    good: sanitizeCount(value?.good),
+    rare: sanitizeCount(value?.rare),
+    superRare: sanitizeCount(value?.superRare),
+    dead: sanitizeCount(value?.dead),
+    shark: sanitizeCount(value?.shark),
+  }
+}
+
+export function sumFinalTankCounts(counts: FinalTankCounts): number {
+  return counts.normal + counts.good + counts.rare + counts.superRare + counts.dead + counts.shark
+}
+
+export function getRecordFinalCounts(record: ReadingRecord): FinalTankCounts {
+  if (record.battleReport?.finalCounts) return normalizeFinalTankCounts(record.battleReport.finalCounts)
+  return normalizeFinalTankCounts({
+    normal: record.normalFish ?? record.fishEarned,
+    good: record.goodFish,
+    rare: record.rareFish,
+    superRare: record.superRareFish,
+    dead: record.deadFish,
+    shark: record.sharkCount,
+  })
+}
+
 function parseSave(raw: string | null): AppSaveV2 | null {
   if (!raw) return null
   try {
@@ -359,18 +424,18 @@ export function clearAllRecords(): void {
 }
 
 export function recordStats(records: ReadingRecord[]) {
-  const totalFish = records.reduce((acc, r) => acc + r.fishEarned, 0)
+  const totalFish = records.reduce((acc, r) => acc + sumFinalTankCounts(getRecordFinalCounts(r)), 0)
   const totalEffective = records.reduce((acc, r) => acc + r.effectiveSeconds, 0)
   const reverseSessions = records.filter((r) => r.mode === 'reverse').length
   const studySessions = records.filter((r) => r.mode === 'study').length
   const positiveSessions = records.filter((r) => r.mode === 'positive' || r.mode === undefined).length
   const rareFishSessions = records.filter((r) => r.rareFishUnlocked).length
-  const totalNormalFish = records.reduce((acc, r) => acc + (r.normalFish ?? r.fishEarned), 0)
-  const totalGoodFish = records.reduce((acc, r) => acc + (r.goodFish ?? 0), 0)
-  const totalRareFish = records.reduce((acc, r) => acc + (r.rareFish ?? 0), 0)
-  const totalSuperRareFish = records.reduce((acc, r) => acc + (r.superRareFish ?? r.battleReport?.finalCounts.superRare ?? 0), 0)
-  const totalDeadFish = records.reduce((acc, r) => acc + (r.deadFish ?? 0), 0)
-  const totalSharks = records.reduce((acc, r) => acc + (r.sharkCount ?? r.battleReport?.finalCounts.shark ?? 0), 0)
+  const totalNormalFish = records.reduce((acc, r) => acc + getRecordFinalCounts(r).normal, 0)
+  const totalGoodFish = records.reduce((acc, r) => acc + getRecordFinalCounts(r).good, 0)
+  const totalRareFish = records.reduce((acc, r) => acc + getRecordFinalCounts(r).rare, 0)
+  const totalSuperRareFish = records.reduce((acc, r) => acc + getRecordFinalCounts(r).superRare, 0)
+  const totalDeadFish = records.reduce((acc, r) => acc + getRecordFinalCounts(r).dead, 0)
+  const totalSharks = records.reduce((acc, r) => acc + getRecordFinalCounts(r).shark, 0)
   const totalSharksDefeated = records.reduce((acc, r) => acc + (r.battleReport?.sharksDefeated ?? 0), 0)
   return {
     sessionCount: records.length,
@@ -502,4 +567,78 @@ export function getBestiary(records: ReadingRecord[]): BestiaryEntry[] {
       unlockHint: '累计 10 条死鱼，召出第一条怨念鲨鱼。',
     },
   ]
+}
+
+// ── Achievement system ──
+export type AchievementId =
+  | 'first-session'
+  | 'total-30min'
+  | 'total-2h'
+  | 'total-5h'
+  | 'fish-50'
+  | 'fish-200'
+  | 'fish-1000'
+  | 'rare-first'
+  | 'rare-10'
+  | 'all-rare-species'
+  | 'super-rare-first'
+  | 'super-rare-3'
+  | 'shark-first'
+  | 'shark-defeated'
+  | 'shark-5-defeated'
+  | 'no-dead-session'
+  | 'sessions-10'
+  | 'sessions-30'
+
+export type AchievementEntry = {
+  id: AchievementId
+  name: string
+  description: string
+  unlockHint: string
+  unlocked: boolean
+  unlockedAt?: string
+  icon: string
+}
+
+export function getAchievements(records: ReadingRecord[]): AchievementEntry[] {
+  const totalSeconds = records.reduce((a, r) => a + r.effectiveSeconds, 0)
+  const totalFish = records.reduce((a, r) => a + sumFinalTankCounts(getRecordFinalCounts(r)), 0)
+  const totalRare = records.reduce((a, r) => a + countGeneratedTier(r, 'rare'), 0)
+  const totalSuperRare = records.reduce((a, r) => a + (r.battleReport?.superRareSummoned ?? 0), 0)
+  const totalSharks = records.reduce((a, r) => a + (r.battleReport?.sharksSummoned ?? 0), 0)
+  const totalSharksDefeated = records.reduce((a, r) => a + (r.battleReport?.sharksDefeated ?? 0), 0)
+  const rareDex = getRareFishDex(records)
+  const allRareUnlocked = rareDex.every(e => e.unlocked)
+  const hasNoDeadSession = records.some(r => countGeneratedTier(r, 'dead') === 0 && r.effectiveSeconds >= 30)
+
+  function first(pred: (r: ReadingRecord) => boolean): string | undefined {
+    return [...records].reverse().find(pred)?.endedAt
+  }
+
+  const defs: Array<Omit<AchievementEntry, 'unlocked' | 'unlockedAt'> & { check: boolean; when?: string }> = [
+    { id: 'first-session', name: '初次下水', icon: '🐠', description: '完成第一次养鱼会话。', unlockHint: '完成任意一次养鱼。', check: records.length >= 1, when: records.length >= 1 ? first(() => true) : undefined },
+    { id: 'sessions-10', name: '坚持十回', icon: '📅', description: '累计完成 10 次养鱼会话。', unlockHint: '累计完成 10 次会话。', check: records.length >= 10, when: records.length >= 10 ? records[records.length - 10]?.endedAt : undefined },
+    { id: 'sessions-30', name: '月度鱼农', icon: '🗓️', description: '累计完成 30 次养鱼会话。', unlockHint: '累计完成 30 次会话。', check: records.length >= 30, when: records.length >= 30 ? records[records.length - 30]?.endedAt : undefined },
+    { id: 'total-30min', name: '半小时达人', icon: '⏱️', description: '累计有效时长达到 30 分钟。', unlockHint: '累计养鱼 30 分钟。', check: totalSeconds >= 1800, when: first((_r, idx = 0, arr = records) => { let s = 0; for (let i = arr.length - 1; i >= 0; i--) { s += arr[i].effectiveSeconds; if (s >= 1800) { idx = i; break; } } return idx === records.indexOf(_r) && totalSeconds >= 1800 }) },
+    { id: 'total-2h', name: '两小时专注', icon: '🕰️', description: '累计有效时长达到 2 小时。', unlockHint: '累计养鱼 2 小时。', check: totalSeconds >= 7200 },
+    { id: 'total-5h', name: '五小时鱼王', icon: '👑', description: '累计有效时长达到 5 小时。', unlockHint: '累计养鱼 5 小时。', check: totalSeconds >= 18000 },
+    { id: 'fish-50', name: '小鱼池', icon: '🐟', description: '累计结算鱼数达到 50 条。', unlockHint: '累计获得 50 条鱼。', check: totalFish >= 50 },
+    { id: 'fish-200', name: '中型鱼缸', icon: '🐡', description: '累计结算鱼数达到 200 条。', unlockHint: '累计获得 200 条鱼。', check: totalFish >= 200 },
+    { id: 'fish-1000', name: '万鱼朝宗', icon: '🌊', description: '累计结算鱼数达到 1000 条。', unlockHint: '累计获得 1000 条鱼。', check: totalFish >= 1000 },
+    { id: 'rare-first', name: '初见稀有', icon: '✨', description: '第一次获得稀有鱼。', unlockHint: '拿到第一条稀有鱼。', check: totalRare >= 1, when: first(r => countGeneratedTier(r, 'rare') > 0) },
+    { id: 'rare-10', name: '稀有常客', icon: '💎', description: '累计获得 10 条稀有鱼。', unlockHint: '累计获得 10 条稀有鱼。', check: totalRare >= 10 },
+    { id: 'all-rare-species', name: '四鱼齐聚', icon: '🌟', description: '解锁全部 4 种稀有鱼。', unlockHint: '每种稀有鱼各出现一次。', check: allRareUnlocked },
+    { id: 'super-rare-first', name: '传说诞生', icon: '🦋', description: '首次触发 10 稀有鱼合体，生成超级稀有鱼。', unlockHint: '累计 10 条稀有鱼完成合体。', check: totalSuperRare >= 1, when: first(r => (r.battleReport?.superRareSummoned ?? 0) > 0) },
+    { id: 'super-rare-3', name: '三传并立', icon: '🏆', description: '累计召出 3 条超级稀有鱼。', unlockHint: '累计召出 3 条超级稀有鱼。', check: totalSuperRare >= 3 },
+    { id: 'shark-first', name: '鲨鱼降临', icon: '🦈', description: '第一次因死鱼召出怨念鲨鱼。', unlockHint: '累计 10 条死鱼，召出怨念鲨鱼。', check: totalSharks >= 1, when: first(r => (r.battleReport?.sharksSummoned ?? 0) > 0) },
+    { id: 'shark-defeated', name: '鱼群反杀', icon: '⚔️', description: '首次击杀怨念鲨鱼。', unlockHint: '让稀有鱼或超级稀有鱼击杀一条怨念鲨鱼。', check: totalSharksDefeated >= 1, when: first(r => (r.battleReport?.sharksDefeated ?? 0) > 0) },
+    { id: 'shark-5-defeated', name: '五杀鲨神', icon: '🗡️', description: '累计击杀 5 条怨念鲨鱼。', unlockHint: '累计击杀 5 条怨念鲨鱼。', check: totalSharksDefeated >= 5 },
+    { id: 'no-dead-session', name: '零死亡', icon: '🛡️', description: '完成一次没有死鱼的养鱼会话（至少 30 秒）。', unlockHint: '一次会话全程没有死鱼。', check: hasNoDeadSession, when: first(r => countGeneratedTier(r, 'dead') === 0 && r.effectiveSeconds >= 30) },
+  ]
+
+  return defs.map(({ check, when, ...rest }) => ({
+    ...rest,
+    unlocked: check,
+    unlockedAt: check ? when : undefined,
+  }))
 }

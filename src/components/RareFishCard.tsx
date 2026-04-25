@@ -4,18 +4,22 @@ type Props = {
   compact?: boolean
 }
 
-function glowByName(name: string) {
-  const map = [
+function glowByName(name: string): [string, string] {
+  const map: Array<[string, [string, string]]> = [
     ['晨光', ['#fde68a', '#38bdf8']],
     ['静海', ['#67e8f9', '#1d4ed8']],
     ['银月', ['#e2e8f0', '#7dd3fc']],
     ['晚霞', ['#f9a8d4', '#f59e0b']],
-  ] as const
+    ['深渊', ['#6d28d9', '#4f46e5']],
+    ['极光', ['#bae6fd', '#0891b2']],
+    ['赤焰', ['#fca5a5', '#dc2626']],
+    ['苍穹', ['#e0f2fe', '#38bdf8']],
+  ]
 
   for (const [key, colors] of map) {
     if (name.includes(key)) return colors
   }
-  return ['#7dd3fc', '#38bdf8'] as const
+  return ['#7dd3fc', '#38bdf8']
 }
 
 export function RareFishCard({ name, subtitle = '稀有鱼', compact = false }: Props) {

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AquariumTank, type FishPositionMap, type AquariumHandle } from '../components/AquariumTank'
 import { VolumeMeter } from '../components/VolumeMeter'
@@ -104,14 +103,6 @@ function pickRareFishName(seed: number): string {
   return RARE_FISH_NAMES[idx]!
 }
 
-function DebugButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
-  return (
-    <button type="button" className="debug-panel__button secondary" onClick={onClick}>
-      {children}
-    </button>
-  )
-}
-
 function classifyFish(mode: GameMode, stats: WindowStats): Exclude<FishTier, 'superRare'> {
   if (mode === 'study') {
     const stableQuiet = stats.quietSeconds + stats.warnSeconds * 0.65
@@ -211,8 +202,8 @@ export function Reading() {
   const [meterLevel, setMeterLevel] = useState(0)
   const [progressSeconds, setProgressSeconds] = useState(0)
   const [lastTier, setLastTier] = useState<Exclude<FishTier, 'superRare'> | null>(null)
-  const [showDebugPanel, setShowDebugPanel] = useState(false)
   const [showHud, setShowHud] = useState(false)
+  const [showActionMenu, setShowActionMenu] = useState(false)
   const [unlockedRareName, setUnlockedRareName] = useState<string | null>(null)
   const [mergeAnim, setMergeAnim] = useState<'shark' | 'superRare' | null>(null)
   const [newSuperRareUnlock, setNewSuperRareUnlock] = useState<string | null>(null)
@@ -292,6 +283,7 @@ export function Reading() {
       if (pipeline.context.state === 'suspended') await pipeline.context.resume()
       startedAtRef.current = new Date().toISOString()
       resetCounters()
+      setShowActionMenu(false)
       setUiStatus('quiet')
       setLoopOn(true)
     } catch (e) {
@@ -788,6 +780,7 @@ export function Reading() {
     setUiStatus('idle')
     startedAtRef.current = null
     resetCounters()
+    setShowActionMenu(false)
     navigate('/result', { state: payload })
   }, [cleanupMic, navigate])
 
@@ -796,72 +789,9 @@ export function Reading() {
     setUiStatus('idle')
     setErrorMessage(null)
     startedAtRef.current = null
+    setShowActionMenu(false)
     resetCounters()
   }, [cleanupMic])
-
-  const injectFish = useCallback((tier: Exclude<FishTier, 'superRare'>, amount = 1) => {
-    if (amount <= 0) return
-    const nextCounts = { ...fishCountsRef.current }
-    const nextResults = [...fishResultsRef.current]
-    let firstRareName: string | null = null
-
-    for (let i = 0; i < amount; i += 1) {
-      nextCounts[tier] += 1
-      let rareName: string | undefined
-      if (tier === 'rare') {
-        rareName = pickRareFishName(effectiveRef.current + nextResults.length + i)
-        // 每条稀有鱼都记录，取最后一条显示 toast
-        firstRareName = rareName
-      }
-      nextResults.push({
-        tier,
-        rareFishName: rareName,
-        segments: Array.from({ length: 30 }, () => (tier === 'dead' ? 'bad' : tier === 'rare' ? 'good' : tier === 'good' ? 'warn' : 'good')),
-      })
-    }
-
-    if (firstRareName) {
-      rareFishNameRef.current = firstRareName
-      setUnlockedRareName(firstRareName)
-    }
-    fishCountsRef.current = nextCounts
-    fishResultsRef.current = nextResults
-    setGeneratedCounts(nextCounts)
-    setLastTier(tier)
-    // 检测合成触发，并真正执行合成（更新 counts）
-    const b = buildBattle(nextCounts)
-    if (b.superRareSummoned > 0) {
-      setMergeAnim('superRare')
-      setTimeout(() => setMergeAnim(null), 2800)
-      // 真正执行合成：用 finalCounts 更新
-      fishCountsRef.current = b.finalCounts
-      setGeneratedCounts(b.finalCounts)
-      // 为每条新合成的超稀有鱼创建带血量的实例
-      const unlockedIds = getUnlockedSuperRareIds()
-      for (let si = 0; si < b.superRareSummoned; si++) {
-        const dexEntry = pickRandomSuperRare(unlockedIds) ?? SUPER_RARE_DEX[0]
-        superRareInstancesRef.current.push({
-          id: `sr-${Date.now()}-${si}`,
-          hp: 10,
-          maxHp: 10,
-          healTimer: 0,
-          skillCooldown: 0,
-          shieldCharges: 0,
-          dexId: dexEntry?.id ?? null,
-        })
-      }
-    } else if (b.sharksSummoned > 0) {
-      setMergeAnim('shark')
-      setTimeout(() => setMergeAnim(null), 2800)
-    }
-    // 死鱼 >= 10 触发 dormant 鲨鱼苏醒
-    const dormantShark = sharkStateRef.current.find(s => s.state === 'dormant')
-    if (dormantShark && nextCounts.dead >= 10) {
-      dormantShark.state = 'awakening'
-      dormantShark.stateTimer = 0
-      setSharksVersion(v => v + 1)
-    }
-  }, [])
 
   const progressPct = Math.min(100, (progressSeconds / FISH_WINDOW_SECONDS) * 100)
   const progressSegments = 30
@@ -1067,47 +997,30 @@ export function Reading() {
         </div>
         )}
 
-        <div className="floating-actions floating-actions--reading">
+        <div className={`floating-actions floating-actions--reading${showActionMenu ? ' is-expanded' : ' is-collapsed'}`}>
           {uiStatus === 'idle' || uiStatus === 'error' ? (
             <button type="button" onClick={startReading}>{uiStatus === 'error' ? '重试' : '开始'}</button>
           ) : (
             <>
-              <button type="button" onClick={endSession}>结束</button>
-              <button type="button" className="secondary" onClick={resetLocal}>重置</button>
-              <Link to="/"><button type="button" className="secondary">首页</button></Link>
+              <button
+                type="button"
+                className="floating-actions__menu-toggle secondary"
+                onClick={() => setShowActionMenu((v) => !v)}
+                aria-label={showActionMenu ? '收起操作菜单' : '展开操作菜单'}
+                aria-expanded={showActionMenu}
+              >
+                ⋮
+              </button>
+              {showActionMenu ? (
+                <div className="floating-actions__menu-list">
+                  <button type="button" onClick={endSession}>结束</button>
+                  <button type="button" className="secondary" onClick={resetLocal}>重置</button>
+                  <Link to="/" onClick={() => setShowActionMenu(false)}><button type="button" className="secondary">首页</button></Link>
+                </div>
+              ) : null}
             </>
           )}
-          <button type="button" className="secondary" onClick={() => setShowDebugPanel((v) => !v)}>
-            {showDebugPanel ? '收起测试入口' : '测试入口'}
-          </button>
         </div>
-
-        {showDebugPanel ? (
-          <div className="debug-panel card">
-            <div className="debug-panel__title">临时调试入口</div>
-            <div className="debug-panel__hint">仅用于快速生成鱼和排查规则，后续可直接删除。</div>
-            <div className="debug-panel__hint" style={{ marginTop: '0.35rem' }}>
-              原始：普通 {fishCounts.normal} / 优质 {fishCounts.good} / 稀有 {fishCounts.rare} / 死鱼 {fishCounts.dead}
-            </div>
-            <div className="debug-panel__hint">
-              战后：普通 {previewCounts.normal} / 优质 {previewCounts.good} / 稀有 {previewCounts.rare} / 超稀有 {previewCounts.superRare} / 死鱼 {previewCounts.dead} / 鲨鱼 {previewCounts.shark}
-            </div>
-            <div className="debug-panel__hint">
-              战报：召出鲨鱼 {previewBattle.sharksSummoned} / 击杀鲨鱼 {previewBattle.sharksDefeated} / 超稀有阵亡 {previewBattle.superRareDefeated}
-            </div>
-            <div className="debug-panel__hint">
-              吞食：普通 {previewBattle.fishEaten.normal} / 优质 {previewBattle.fishEaten.good} / 稀有 {previewBattle.fishEaten.rare} / 超稀有 {previewBattle.fishEaten.superRare}
-            </div>
-            <div className="debug-panel__actions">
-              <DebugButton onClick={() => injectFish('normal')}>+1 普通鱼</DebugButton>
-              <DebugButton onClick={() => injectFish('good')}>+1 优质鱼</DebugButton>
-              <DebugButton onClick={() => injectFish('rare')}>+1 稀有鱼</DebugButton>
-              <DebugButton onClick={() => injectFish('dead')}>+1 死鱼</DebugButton>
-              <DebugButton onClick={() => injectFish('dead', 10)}>+10 死鱼（测鲨鱼）</DebugButton>
-              <DebugButton onClick={() => injectFish('rare', 10)}>+10 稀有鱼（测超稀有）</DebugButton>
-            </div>
-          </div>
-        ) : null}
       </div>
     </section>
   )
